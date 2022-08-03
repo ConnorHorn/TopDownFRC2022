@@ -1,6 +1,7 @@
 <script>
     import {writable} from "svelte/store";
     import {onInterval} from "./utils";
+    import {ballSlot1, ballSlot2, ballSlot4, ballSlot3} from "./stores";
 
     export let startX = 0;
     export let startY = 0;
@@ -10,8 +11,8 @@
     export let ballSlot
     let drawX=0
     let drawY=0
-    startX=startX+65
-    startY=startY+65
+    startX=startX
+    startY=startY
     endX=endX+((Math.random()-0.5)*2)*50
     endY=endY+((Math.random()-0.5)*2)*50
     let lengthX = Math.abs(endX-startX)
@@ -23,12 +24,10 @@
     let ballSize=minBallSize;
     const countUp = () => (milliCount += 1.8);
     onInterval(countUp, 1);
-    console.log(angle);
     $: {
         move(milliCount)
     }
 
-    console.log("lengthHype:"+lengthHype)
     function move(){
         if(milliCount<=lengthHype) {
             if(milliCount<=lengthHype/2){
@@ -37,11 +36,25 @@
             if(milliCount>lengthHype/2){
                 ballSize = maxBallSize-((milliCount-(lengthHype/2))/(lengthHype/2))*(maxBallSize-minBallSize)
             }
-            console.log(angle)
             drawX = Math.cos(angle) * milliCount + startX
             drawY = Math.sin(angle) * milliCount + startY
             drawX=drawX-ballSize/2
             drawY=drawY-ballSize/2
+            return;
+        }
+        switch (ballSlot){
+            case 1:
+                $ballSlot1=true;
+                break;
+            case 2:
+                $ballSlot2=true;
+                break;
+            case 3:
+                $ballSlot3=true;
+                break;
+            case 4:
+                $ballSlot4=true;
+                break;
         }
     }
 

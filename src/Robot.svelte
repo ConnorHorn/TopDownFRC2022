@@ -1,9 +1,10 @@
 <script>
     import { onInterval } from './utils.js';
-    import {test, ballSlot1, ballSlot2, ballSlot3, ballSlot4} from "./stores";
+    import {test, ballSlot1, ballSlot2, ballSlot3, ballSlot4, intake} from "./stores";
     import { spring } from 'svelte/motion';
     import {writable} from "svelte/store";
     import ShotCargo from "./ShotCargo.svelte";
+    import Cargo from "./Cargo.svelte";
     let key
     let x=100;
     let y=100;
@@ -15,10 +16,11 @@
     let ball2Coords = writable({ x: 0, y: 0});
     let ball3Coords = writable({ x: 0, y: 0});
     let ball4Coords = writable({ x: 0, y: 0});
+    let floorBalls = [[500,200]];
     let centerCoords = writable({x: window.innerWidth/2, y: window.innerHeight/2})
     let maxYAcc=100, maxXAcc=100;
-    let maxRotAcc=10, maxRotSpeed=1000, rotAcc=0, rot=0, rotDecay=0.3, rotPace=0.5;
-    let yDecay=1, xDecay=1
+    let maxRotAcc=8, maxRotSpeed=700, rotAcc=0, rot=0, rotDecay=0.3, rotPace=0.5;
+    let yDecay=1, xDecay=1;
     let milliCount=0;
     const countUp = () => (milliCount += 1);
     onInterval(countUp, 15);
@@ -26,6 +28,7 @@
     $ : {
         calcMovement(milliCount)
         calcRotation(milliCount)
+        manageIntake(milliCount)
     }
 
     function calcRotation(){
@@ -53,9 +56,14 @@
     }
 
     function calcMovement() {
+        let xPlacement=$coords.x>window.innerWidth/2;
+        let yPlacement=$coords.y>window.innerHeight/2
         if(!checkMoveValid($coords.x, $coords.y)){
-            xValue=40;
-            yValue=40;
+            coords.update($coords => ({
+                x: ((xPlacement) ? $coords.x+10 : $coords.x-10),
+                y: ((yPlacement) ? $coords.y+10 : $coords.y)
+            }));
+
         }
         if(wDown){
             if(yValue+2.5<=maxYAcc) {
@@ -97,17 +105,17 @@
         }
         x+=xValue*speedModifier;
         y-=yValue*speedModifier;
-        if(x>window.innerWidth-130){
-            x=window.innerWidth-130
+        if(x>window.innerWidth-65){
+            x=window.innerWidth-65
         }
-        if(y>window.innerHeight-130){
-            y=window.innerHeight-130
+        if(y>window.innerHeight-65){
+            y=window.innerHeight-65
         }
-        if(x<0){
-            x=0;
+        if(x-65<0){
+            x=65;
         }
-        if(y<0){
-            y=0;
+        if(y-65<0){
+            y=65;
         }
         let xValid=false, yValid=false;
         if(checkMoveValid($coords.x,y)){
@@ -136,10 +144,33 @@
     }
 
     function checkMoveValid(x, y){
-        console.log(Math.sqrt(Math.abs(window.innerWidth/2 - x-65) ** 2 + Math.abs(window.innerHeight/2 - y-65) ** 2))
-        return Math.sqrt(Math.abs(window.innerWidth/2 - x-65) ** 2 + Math.abs(window.innerHeight/2 - y-65) ** 2) >= 180;
+       // console.log(Math.sqrt(Math.abs(window.innerWidth/2 - x-65) ** 2 + Math.abs(window.innerHeight/2 - y-65) ** 2))
+        return Math.sqrt(Math.abs(window.innerWidth/2 - x) ** 2 + Math.abs(window.innerHeight/2 - y) ** 2) >= 180;
 
     }
+
+    function manageIntake(){
+        intake.update($intake => ({
+            x1: rotate($coords.x,$coords.y,$coords.x-60,$coords.y-120,rot*-1)[0],
+            y1: rotate($coords.x,$coords.y,$coords.x-60,$coords.y-120,rot*-1)[1],
+            x2: rotate($coords.x,$coords.y,$coords.x+60,$coords.y-120,rot*-1)[0],
+            y2: rotate($coords.x,$coords.y,$coords.x+60,$coords.y-120,rot*-1)[1],
+            x3: rotate($coords.x,$coords.y,$coords.x+60,$coords.y-65,rot*-1)[0],
+            y3: rotate($coords.x,$coords.y,$coords.x+60,$coords.y-65,rot*-1)[1],
+            x4: rotate($coords.x,$coords.y,$coords.x-60,$coords.y-65,rot*-1)[0],
+            y4: rotate($coords.x,$coords.y,$coords.x-60,$coords.y-65,rot*-1)[1]
+        }));
+    }
+
+    function rotate(cx, cy, x, y, angle) {
+        let radians = (Math.PI / 180) * angle,
+            cos = Math.cos(radians),
+            sin = Math.sin(radians),
+            nx = (cos * (x - cx)) + (sin * (y - cy)) + cx,
+            ny = (cos * (y - cy)) - (sin * (x - cx)) + cy;
+        return [nx, ny];
+    }
+
     function on_key_down(event) {
         // if (event.repeat) return;
         switch (event.key) {
@@ -213,7 +244,6 @@
                 event.preventDefault();
                 break;
             case "i":
-                console.log("here")
                 spaceDown = false;
                 if($ballSlot1){
                     ball1Coords.update($ball1Coords => ({
@@ -221,7 +251,6 @@
                         y: $coords.y
                     }));
                     $ballSlot1=false;
-                    console.log($ball1Coords.x)
                 }else if($ballSlot2){
                     ball2Coords.update($ball2Coords => ({
                         x: $coords.x,
@@ -259,15 +288,27 @@
     {window.innerHeight}
 </div>
 
-<div class="box grid h-screen place-items-center" style="transform:
-		translate({$coords.x}px,{$coords.y}px)
+<div class="box grid h-screen place-items-center" id="robot" style="transform:
+		translate({$coords.x-65}px,{$coords.y-65}px)
         rotate({rot}deg)">
 
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-[90px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="transform: rotate({rot*-1+Math.atan2( window.innerHeight/2-$coords.y-50, window.innerWidth/2 -$coords.x-50) * ( 180 / Math.PI )+90}deg)">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-[90px] fixed" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2" style="transform: rotate({rot*-1+Math.atan2( window.innerHeight/2-$coords.y-50, window.innerWidth/2 -$coords.x-50) * ( 180 / Math.PI )+90}deg)">
         <path stroke-linecap="round" stroke-linejoin="round" d="M9 11l3-3m0 0l3 3m-3-3v8m0-13a9 9 0 110 18 9 9 0 010-18z" />
     </svg>
 
+    <intake>
+    <svg id="intake" xmlns="http://www.w3.org/2000/svg" class="fixed -mt-[158px] w-[160px] -ml-[80px]" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+    </svg>
+    </intake>
+
 </div>
+
+{#each floorBalls as ball}
+<Cargo coords={ball}/>
+    {/each}
+
+
 {#if !$ballSlot1}
     <ShotCargo startX={$ball1Coords.x} startY={$ball1Coords.y} endX={$centerCoords.x} endY="{$centerCoords.y}" miss={false} ballSlot={1}/>
     {/if}
@@ -280,6 +321,8 @@
 {#if !$ballSlot4}
     <ShotCargo startX={$ball4Coords.x} startY={$ball4Coords.y} endX={$centerCoords.x} endY="{$centerCoords.y}" miss={false} ballSlot={4}/>
 {/if}
+
+
 
 <style>
     .box {
