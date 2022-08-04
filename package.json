@@ -27,8 +27,11 @@
     "tailwindcss": "^3.0.23"
   },
   "dependencies": {
+    "firebase": "^9.9.1",
     "gh-pages": "^4.0.0",
     "rollup-plugin-css-only": "^3.1.0",
+    "rxfire": "^6.0.3",
+    "rxjs": "^7.5.6",
     "sirv-cli": "^1.0.0",
     "svelte-qrcode": "^1.0.0"
   }

@@ -1,5 +1,5 @@
 <script>
-    import {fieldHeight, fieldWidth} from "./stores";
+    import {fieldHeight, fieldWidth, score} from "./stores";
     import Robot from "./Robot.svelte";
     import CargoOnField from "./CargoOnField.svelte";
 
@@ -7,12 +7,36 @@
 </script>
 
 
-<div class="fixed" style="width: {$fieldWidth} height: {fieldHeight}">
+<div class="fixed text-center" style="width: {$fieldWidth} height: {fieldHeight} ">
     <svg width={$fieldWidth} height={$fieldHeight} class="fixed">
         <rect width={$fieldWidth} height={$fieldHeight} style="fill:black;stroke-width:3;stroke:white" />
     </svg>
-    <div class="mt-[{$fieldHeight/2}px] ml-[{$fieldWidth/2}px] fixed z-20">
-        <svg xmlns="http://www.w3.org/2000/svg" class="fixed overflow-visible"><circle fill="none" r="{hubSize}" stroke="white" stroke-linecap="round" stroke-width="8" stroke-linejoin="round"/></svg>
+    <div class="fixed z-20 text-8xl text-white font-bold" style=" transform:
+     translate({$fieldWidth/2}px,{$fieldHeight/2}px)">
+            <div class="fixed" style=" transform:
+     translate({($score.toString().length*-29)+2}px,-85px)">
+                {$score}
+            </div>
+        <div class="fixed z-20" style=" transform:
+     translate(-70px,-1px)">
+            <button class="btn btn-circle btn-accent btn-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="3">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+            </button>
+            </div>
+
+        <div class="fixed z-30" style=" transform:
+     translate(10px,-1px)">
+            <button class="btn btn-circle btn-accent btn-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" class="" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                </svg>
+            </button>
+        </div>
+
+
+        <svg xmlns="http://www.w3.org/2000/svg" class="fixed overflow-visible z-10"><circle fill="none" r="{hubSize}" stroke="white" stroke-linecap="round" stroke-width="8" stroke-linejoin="round"/></svg>
     </div>
     <div class="z-50 fixed">
     <CargoOnField/>

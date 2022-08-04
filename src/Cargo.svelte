@@ -6,7 +6,6 @@
     const dispatch = createEventDispatcher();
 
     export let coords;
-    console.log(coords)
     let milliCount=0;
     let ballSize=55;
     const countUp = () => (milliCount += 1.8);
@@ -14,7 +13,6 @@
     onInterval(countUp, 1);
     $: {
         checkInside(milliCount)
-        console.log(coords[0])
     }
 
     function intook() {
