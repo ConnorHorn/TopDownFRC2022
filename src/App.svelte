@@ -5,6 +5,6 @@
     let xOff = (innerWidth-$fieldWidth)/2
 </script>
 
-<div class="mt-[{yOff}px] fixed">
+<div class="mt-[{50}px] fixed">
 <Field/>
 </div>
