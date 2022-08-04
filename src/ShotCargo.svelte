@@ -1,7 +1,7 @@
 <script>
     import {writable} from "svelte/store";
     import {onInterval} from "./utils";
-    import {ballSlot1, ballSlot2, ballSlot4, ballSlot3} from "./stores";
+    import {ballSlot1, ballSlot2, ballSlot4, ballSlot3, ballsInRobot} from "./stores";
 
     export let startX = 0;
     export let startY = 0;
@@ -27,7 +27,7 @@
     $: {
         move(milliCount)
     }
-
+    $ballsInRobot--;
     function move(){
         if(milliCount<=lengthHype) {
             if(milliCount<=lengthHype/2){

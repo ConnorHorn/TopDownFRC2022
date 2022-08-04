@@ -1,6 +1,9 @@
 <script>
     import {onInterval} from "./utils";
-    import {intake} from "./stores";
+    import {ballsInRobot, intake} from "./stores";
+    import { createEventDispatcher } from 'svelte';
+
+    const dispatch = createEventDispatcher();
 
     export let coords;
     console.log(coords)
@@ -11,12 +14,22 @@
     onInterval(countUp, 1);
     $: {
         checkInside(milliCount)
+        console.log(coords[0])
+    }
+
+    function intook() {
+        dispatch('intake', {
+            x: coords[0],
+            y: coords[1]
+        });
     }
 
     function checkInside(){
-        let polygon = [[$intake.x1-ballSize/2,$intake.y1-ballSize/2],[$intake.x2+ballSize/2,$intake.y2-ballSize/2],[$intake.x3+ballSize/2,$intake.y3],[$intake.x4-ballSize/2,$intake.y4]]
+        let polygon = [[$intake.x1,$intake.y1],[$intake.x2,$intake.y2],[$intake.x3,$intake.y3],[$intake.x4,$intake.y4]]
         insideIntake=inside(coords,polygon)
-        console.log(insideIntake)
+        if(insideIntake && $ballsInRobot<2){
+            intook();
+        }
     }
 
     function inside(point, vs) {
