@@ -1,14 +1,17 @@
 <script>
     import {writable} from "svelte/store";
     import {onInterval} from "./utils";
-    import {ballSlot1, ballSlot2, ballSlot4, ballSlot3, ballsInRobot, score} from "./stores";
+    import {ballsInRobot, fieldBallCount, matchTime, score, storeTurretAngle} from "./stores";
+    import { createEventDispatcher } from 'svelte';
 
+    const dispatch = createEventDispatcher();
     export let startX = 0;
     export let startY = 0;
     export let endX = 0;
     export let endY = 0;
     export let miss
-    export let ballSlot
+    export let id;
+    console.log("ar")
     let drawX=0
     let drawY=0
     startX=startX
@@ -17,12 +20,20 @@
     endY=endY+((Math.random()-0.5)*2)*50
     let lengthX = Math.abs(endX-startX)
     let lengthY = Math.abs(endY-startY)
+    let pace=1.8;
     let lengthHype = Math.sqrt(lengthX**2+lengthY**2)
     let angle = Math.atan2(endY - startY, endX - startX)
     let milliCount=0;
     let minBallSize=55, maxBallSize=90, endBallSize=60;
     let ballSize=minBallSize;
-    const countUp = () => (milliCount += 1.8);
+    if(miss){
+        angle=($storeTurretAngle-90)*(Math.PI/180);
+        lengthHype=2000
+        pace=6;
+        endBallSize=minBallSize-5;
+    }
+    console.log(angle)
+    const countUp = () => (milliCount += pace);
     onInterval(countUp, 1);
     $: {
         move(milliCount)
@@ -42,21 +53,13 @@
             drawY=drawY-ballSize/2
             return;
         }
-        $score++;
-        switch (ballSlot){
-            case 1:
-                $ballSlot1=true;
-                break;
-            case 2:
-                $ballSlot2=true;
-                break;
-            case 3:
-                $ballSlot3=true;
-                break;
-            case 4:
-                $ballSlot4=true;
-                break;
+        if(!miss && $matchTime>0){
+            $score++
         }
+        $fieldBallCount--
+        dispatch('scored', {
+            id: id
+        });
     }
 
 </script>

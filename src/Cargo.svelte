@@ -1,21 +1,35 @@
 <script>
     import {onInterval} from "./utils";
-    import {ballsInRobot, intake} from "./stores";
+    import {
+        ballBoxBackLeft,
+        ballBoxBackRight,
+        ballBoxFrontLeft,
+        ballBoxFrontRight,
+        ballsInRobot, fieldHeight, fieldWidth, globalSpeedX, globalSpeedY,
+        globalX,
+        globalY,
+        intake
+    } from "./stores";
     import { createEventDispatcher } from 'svelte';
 
     const dispatch = createEventDispatcher();
-
     export let coords;
     let milliCount=0;
     let ballSize=55;
+    let speedX=0;
+    let speedY=0;
+    let speedDecay=0.15;
     const countUp = () => (milliCount += 1.8);
     let insideIntake=false;
-    onInterval(countUp, 1);
+    let insideRobot=false;
+    onInterval(countUp, 15);
     $: {
         checkInside(milliCount)
+        pushBall(milliCount)
     }
-
     function intook() {
+        speedX=0;
+        speedY=0;
         dispatch('intake', {
             x: coords[0],
             y: coords[1]
@@ -28,12 +42,10 @@
         if(insideIntake && $ballsInRobot<2){
             intook();
         }
+
     }
 
     function inside(point, vs) {
-        // ray-casting algorithm based on
-        // https://wrf.ecse.rpi.edu/Research/Short_Notes/pnpoly.html/pnpoly.html
-
         let x = point[0], y = point[1];
 
         let inside = false;
@@ -49,6 +61,70 @@
         return inside;
     }
 
+    function pushBall() {
+        let robotPolygon = [[$ballBoxFrontLeft.x, $ballBoxFrontLeft.y], [$ballBoxFrontRight.x, $ballBoxFrontRight.y], [$ballBoxBackRight.x, $ballBoxBackRight.y], [$ballBoxBackLeft.x, $ballBoxBackLeft.y]]
+        insideRobot = inside(coords, robotPolygon)
+        if(insideRobot){
+            if(Math.abs($globalSpeedX)>Math.abs(speedX)){
+                speedX=$globalSpeedX;
+            }
+            if(Math.abs($globalSpeedY)>Math.abs(speedY)) {
+                speedY = $globalSpeedY;
+            }
+        }
+        coords[0]+=speedX;
+        coords[1]-=speedY;
+        if(speedX>0){
+            speedX-=speedDecay;
+        }
+        if(speedX<0){
+            speedX+=speedDecay;
+        }
+        if(speedY>0){
+            speedY-=speedDecay;
+        }
+        if(speedY<0){
+            speedY+=speedDecay;
+        }
+        isWhereItShouldntBe();
+
+    }
+
+    function isWhereItShouldntBe(){
+        if(coords[0]<=ballSize/2 && coords[0]!==-100){
+            coords[0]=ballSize/2;
+            speedX*=-1;
+        }
+        if(coords[0]>=$fieldWidth-ballSize/2){
+            coords[0]=$fieldWidth-ballSize/2;
+            speedX*=-1;
+        }
+        if(coords[1]<=ballSize/2 && coords[1]!==-100){
+            coords[1]=ballSize/2;
+            speedY*=-1;
+        }
+        if(coords[1]>=$fieldHeight-ballSize/2){
+            coords[1]=$fieldHeight-ballSize/2;
+            speedY*=-1;
+        }
+        if(Math.sqrt((coords[0]-$fieldWidth/2)**2+(coords[1]-$fieldHeight/2)**2)<120+ballSize/2){
+
+            speedX*=-1;
+            speedY*=-1;
+            if(speedX>0){
+                speedX-=speedDecay;
+            }
+            if(speedX<0){
+                speedX+=speedDecay;
+            }
+            if(speedY>0){
+                speedY-=speedDecay;
+            }
+            if(speedY<0){
+                speedY+=speedDecay;
+            }
+        }
+    }
 
 </script>
 

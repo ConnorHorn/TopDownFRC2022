@@ -1,13 +1,23 @@
 <script>
-    import {fieldHeight, fieldWidth, score} from "./stores";
+    import {fieldHeight, fieldWidth, matchTime, score, vizRing, vizRingSize} from "./stores";
     import Robot from "./Robot.svelte";
     import CargoOnField from "./CargoOnField.svelte";
-
+    let maxTime=$matchTime;
+    let liveTime=$matchTime;
+    let matchPercent=100;
     let hubSize=120;
+
+    $:countDown($matchTime);
+
+    function countDown(){
+        if(matchPercent>0) {
+            liveTime = $matchTime;
+            matchPercent = liveTime / maxTime * 100;
+        }
+    }
 </script>
 
-
-<div class="fixed text-center" style="width: {$fieldWidth} height: {fieldHeight} ">
+<div class="fixed text-center overflow-hidden" style="width: {$fieldWidth} height: {fieldHeight} ">
     <svg width={$fieldWidth} height={$fieldHeight} class="fixed">
         <rect width={$fieldWidth} height={$fieldHeight} style="fill:black;stroke-width:3;stroke:white" />
     </svg>
@@ -37,12 +47,18 @@
 
 
         <svg xmlns="http://www.w3.org/2000/svg" class="fixed overflow-visible z-10"><circle fill="none" r="{hubSize}" stroke="white" stroke-linecap="round" stroke-width="8" stroke-linejoin="round"/></svg>
+        {#if matchPercent>0}
+        <div class="radial-progress z-20 fixed text-green-600 -ml-[127px] -mt-[127px]" style="--value:{matchPercent}; --size:16rem; --thickness: 15px;"></div>
+
+            {/if}
     </div>
     <div class="z-50 fixed">
     <CargoOnField/>
         <Robot/>
 </div>
+    {#if $vizRing}
+    <div class="rounded-full border-green-500 border-4 border-dotted fixed z-90 ml-[450px]" style="height:{$vizRingSize}px; width:{$vizRingSize}px">
+    </div>
+    {/if}
 </div>
-
-
 
