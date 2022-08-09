@@ -2,6 +2,7 @@
     import {fieldHeight, fieldWidth, matchTime, score, vizRing, vizRingSize, reset, fieldBallCount, ballsInRobot} from "./stores";
     import Robot from "./Robot.svelte";
     import CargoOnField from "./CargoOnField.svelte";
+    import TeleRobot from "./TeleRobot.svelte";
     let maxTime=$matchTime;
     let liveTime=$matchTime;
     let matchPercent=100;
@@ -18,6 +19,7 @@
 
     function resetAll(){
         $matchTime=150
+        matchPercent=100
         $reset=true;
         $fieldBallCount=0;
         $ballsInRobot=0;
@@ -26,6 +28,7 @@
 </script>
 
 <div class="fixed text-center overflow-hidden" style="width: {$fieldWidth} height: {fieldHeight} ">
+    <TeleRobot/>
     <svg width={$fieldWidth} height={$fieldHeight} class="fixed">
         <rect width={$fieldWidth} height={$fieldHeight} style="fill:black;stroke-width:3;stroke:white" />
     </svg>
@@ -69,4 +72,5 @@
     </div>
     {/if}
 </div>
+
 

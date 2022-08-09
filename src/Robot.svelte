@@ -4,12 +4,6 @@
         reset,
         globalSpeedX,
         globalSpeedY,
-        ballBoxFrontLeft,
-        ballBoxFrontRight,
-        ballBoxBackLeft,
-        ballBoxBackRight,
-        globalX,
-        globalY,
         fieldWidth,
         fieldHeight,
         intake,
@@ -17,16 +11,13 @@
         vizRingSize,
         vizRing,
         storeTurretAngle,
-        globalAngle
+        globalAngle, robotBallBox, robotCoord
     } from "./stores";
-    import {spring} from 'svelte/motion';
     import {writable} from "svelte/store";
     import ShotCargo from "./ShotCargo.svelte";
-    import Cargo from "./Cargo.svelte";
-
     let key
-    let x = 100;
-    let y = 100;
+    export let x = 100;
+    export let y = 100;
     let speedModifier = 0.3;
     let shiftDown = false, wDown = false, aDown = false, sDown = false, dDown = false, jDown = false, lDown = false,
         spaceDown = false;
@@ -38,7 +29,8 @@
     let ball4Coords = writable({x: 0, y: 0});
     let centerCoords = writable({x: $fieldWidth / 2, y: $fieldHeight / 2})
     let maxYAcc = 100, maxXAcc = 100;
-    let maxRotAcc = 8, maxRotSpeed = 700, rotAcc = 0, rot = 0, rotDecay = 0.3, rotPace = 0.5;
+    let maxRotAcc = 8, maxRotSpeed = 700, rotAcc = 0, rotDecay = 0.3, rotPace = 0.5;
+    export let rot=0;
     let yDecay = 1, xDecay = 1;
     let milliCount = 0;
     let ballSize = 55;
@@ -187,25 +179,18 @@
         }
         x = $coords.x
         y = $coords.y
-        $globalX = x;
-        $globalY = y;
+        $robotCoord.x = x;
+        $robotCoord.y = y;
 
         let ballGap = ballSize / 2;
-        $ballBoxFrontLeft = {
-            x: rotate(x, y, x - 65 - ballGap, y - 65 - ballGap, rot * -1)[0],
-            y: rotate(x, y, x - 65 - ballGap, y - 65 - ballGap, rot * -1)[1]
-        }
-        $ballBoxFrontRight = {
-            x: rotate(x, y, x + 65 + ballGap, y - 65 - ballGap, rot * -1)[0],
-            y: rotate(x, y, x + 65 + ballGap, y - 65 - ballGap, rot * -1)[1]
-        }
-        $ballBoxBackLeft = {
-            x: rotate(x, y, x - 65 - ballGap, y + 65 + ballGap, rot * -1)[0],
-            y: rotate(x, y, x - 65 - ballGap, y + 65 + ballGap, rot * -1)[1]
-        }
-        $ballBoxBackRight = {
-            x: rotate(x, y, x + 65 + ballGap, y + 65 + ballGap, rot * -1)[0],
-            y: rotate(x, y, x + 65 + ballGap, y + 65 + ballGap, rot * -1)[1]
+        $robotBallBox = {x1:rotate(x, y, x - 65 - ballGap, y - 65 - ballGap, rot * -1)[0],
+        x2:rotate(x, y, x + 65 + ballGap, y - 65 - ballGap, rot * -1)[0],
+        x3:rotate(x, y, x + 65 + ballGap, y + 65 + ballGap, rot * -1)[0],
+        x4:rotate(x, y, x - 65 - ballGap, y + 65 + ballGap, rot * -1)[0],
+        y1:rotate(x, y, x - 65 - ballGap, y - 65 - ballGap, rot * -1)[1],
+        y2:rotate(x, y, x + 65 + ballGap, y - 65 - ballGap, rot * -1)[1],
+        y3:rotate(x, y, x + 65 + ballGap, y + 65 + ballGap, rot * -1)[1],
+        y4:rotate(x, y, x - 65 - ballGap, y + 65 + ballGap, rot * -1)[1]
         }
         $globalSpeedX = xValue * speedModifier;
         $globalSpeedY = yValue * speedModifier;

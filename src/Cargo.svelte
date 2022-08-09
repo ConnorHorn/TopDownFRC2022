@@ -1,14 +1,8 @@
 <script>
     import {onInterval} from "./utils";
     import {
-        ballBoxBackLeft,
-        ballBoxBackRight,
-        ballBoxFrontLeft,
-        ballBoxFrontRight,
         ballsInRobot, fieldHeight, fieldWidth, globalSpeedX, globalSpeedY,
-        globalX,
-        globalY,
-        intake
+        intake, robotBallBox
     } from "./stores";
     import { createEventDispatcher } from 'svelte';
 
@@ -16,8 +10,8 @@
     export let coords;
     let milliCount=0;
     let ballSize=55;
-    let speedX=0;
-    let speedY=0;
+   export let speedX=0;
+   export let speedY=0;
     let speedDecay=0.15;
     const countUp = () => (milliCount += 1.8);
     let insideIntake=false;
@@ -62,7 +56,7 @@
     }
 
     function pushBall() {
-        let robotPolygon = [[$ballBoxFrontLeft.x, $ballBoxFrontLeft.y], [$ballBoxFrontRight.x, $ballBoxFrontRight.y], [$ballBoxBackRight.x, $ballBoxBackRight.y], [$ballBoxBackLeft.x, $ballBoxBackLeft.y]]
+        let robotPolygon = [[$robotBallBox.x1,$robotBallBox.y1],[$robotBallBox.x2,$robotBallBox.y2],[$robotBallBox.x3,$robotBallBox.y3],[$robotBallBox.x4,$robotBallBox.y4]]
         insideRobot = inside(coords, robotPolygon)
         if(insideRobot){
             if(Math.abs($globalSpeedX)>Math.abs(speedX) || Math.sign($globalSpeedX)!==Math.sign(speedX)){

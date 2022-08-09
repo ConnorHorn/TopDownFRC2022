@@ -6,10 +6,7 @@ import {
     fieldHeight,
     fieldWidth,
     fieldBallCount,
-    globalX,
-    globalY,
-    globalAngle,
-    ballBoxFrontLeft, ballBoxFrontRight, ballBoxBackRight, ballBoxBackLeft, reset
+    reset, robotBallBox
 } from "./stores";
 import {onInterval} from "./utils";
 
@@ -64,14 +61,15 @@ function clearIllegalBalls(){
         if(floorBalls[i][0]===-100 && floorBalls[i][1]===-100){
             splice=true;
         }
-        if(Math.sqrt((floorBalls[i][0]-$fieldWidth/2)**2+(floorBalls[i][1]-$fieldHeight/2)**2)<135){
-            $fieldBallCount--
-            splice=true;
-        }
         if(splice){
             floorBalls.splice(i,1);
             floorBalls=floorBalls
         }
+        // for(let k=i+1; k< floorBalls.length; k++){
+        //     if(Math.sqrt((floorBalls[i][0]-floorBalls[k][0])**2+(floorBalls[i][1]-floorBalls[k][1])**2)<55/2){
+        //
+        //     }
+        // }
     }
 }
 
@@ -80,7 +78,7 @@ function occupyField(){
         let x = Math.floor(Math.random()*$fieldWidth);
         let y = Math.floor(Math.random()*$fieldHeight);
         let ball = [x,y];
-        if(!floorBalls.includes(ball)  && !inside(ball,[[$ballBoxFrontLeft.x, $ballBoxFrontLeft.y], [$ballBoxFrontRight.x, $ballBoxFrontRight.y], [$ballBoxBackRight.x, $ballBoxBackRight.y], [$ballBoxBackLeft.x, $ballBoxBackLeft.y]])){
+        if(!floorBalls.includes(ball)  && !inside(ball,[[$robotBallBox.x1,$robotBallBox.y1],[$robotBallBox.x2,$robotBallBox.y2],[$robotBallBox.x3,$robotBallBox.y3],[$robotBallBox.x4,$robotBallBox.y4]]) && Math.sqrt((ball[0]-$fieldWidth/2)**2+(ball[1]-$fieldHeight/2)**2)>150){
             $fieldBallCount++
             floorBalls.push(ball);
             floorBalls=floorBalls;

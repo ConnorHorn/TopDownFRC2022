@@ -46,41 +46,6 @@ var app = (function () {
         store.set(value);
         return ret;
     }
-
-    const is_client = typeof window !== 'undefined';
-    let now = is_client
-        ? () => window.performance.now()
-        : () => Date.now();
-    let raf = is_client ? cb => requestAnimationFrame(cb) : noop$1;
-
-    const tasks = new Set();
-    function run_tasks(now) {
-        tasks.forEach(task => {
-            if (!task.c(now)) {
-                tasks.delete(task);
-                task.f();
-            }
-        });
-        if (tasks.size !== 0)
-            raf(run_tasks);
-    }
-    /**
-     * Creates a new task that runs on each raf frame
-     * until it returns a falsy value or is aborted
-     */
-    function loop(callback) {
-        let task;
-        if (tasks.size === 0)
-            raf(run_tasks);
-        return {
-            promise: new Promise(fulfill => {
-                tasks.add(task = { c: callback, f: fulfill });
-            }),
-            abort() {
-                tasks.delete(task);
-            }
-        };
-    }
     function append(target, node) {
         target.appendChild(node);
     }
@@ -17908,13 +17873,9 @@ var app = (function () {
     const vizRingSize=writable(900);
     const storeTurretAngle=writable(0);
     const fieldBallCount=writable(0);
-    const globalX=writable(100);
-    const globalY=writable(100);
+    const robotCoord=writable({x:100, y:100});
     const globalAngle=writable(0);
-    const ballBoxFrontLeft=writable({x:0,y:0});
-    const ballBoxFrontRight=writable({x:0,y:0});
-    const ballBoxBackLeft=writable({x:0,y:0});
-    const ballBoxBackRight=writable({x:0,y:0});
+    const robotBallBox=writable({x1:0,x2:0,x3:0,x4:0,y1:0,y2:0,y3:0,y4:0});
     const globalSpeedX=writable(0);
     const globalSpeedY=writable(0);
 
@@ -17926,123 +17887,12 @@ var app = (function () {
         });
     }
 
-    function is_date(obj) {
-        return Object.prototype.toString.call(obj) === '[object Date]';
-    }
-
-    function tick_spring(ctx, last_value, current_value, target_value) {
-        if (typeof current_value === 'number' || is_date(current_value)) {
-            // @ts-ignore
-            const delta = target_value - current_value;
-            // @ts-ignore
-            const velocity = (current_value - last_value) / (ctx.dt || 1 / 60); // guard div by 0
-            const spring = ctx.opts.stiffness * delta;
-            const damper = ctx.opts.damping * velocity;
-            const acceleration = (spring - damper) * ctx.inv_mass;
-            const d = (velocity + acceleration) * ctx.dt;
-            if (Math.abs(d) < ctx.opts.precision && Math.abs(delta) < ctx.opts.precision) {
-                return target_value; // settled
-            }
-            else {
-                ctx.settled = false; // signal loop to keep ticking
-                // @ts-ignore
-                return is_date(current_value) ?
-                    new Date(current_value.getTime() + d) : current_value + d;
-            }
-        }
-        else if (Array.isArray(current_value)) {
-            // @ts-ignore
-            return current_value.map((_, i) => tick_spring(ctx, last_value[i], current_value[i], target_value[i]));
-        }
-        else if (typeof current_value === 'object') {
-            const next_value = {};
-            for (const k in current_value) {
-                // @ts-ignore
-                next_value[k] = tick_spring(ctx, last_value[k], current_value[k], target_value[k]);
-            }
-            // @ts-ignore
-            return next_value;
-        }
-        else {
-            throw new Error(`Cannot spring ${typeof current_value} values`);
-        }
-    }
-    function spring(value, opts = {}) {
-        const store = writable(value);
-        const { stiffness = 0.15, damping = 0.8, precision = 0.01 } = opts;
-        let last_time;
-        let task;
-        let current_token;
-        let last_value = value;
-        let target_value = value;
-        let inv_mass = 1;
-        let inv_mass_recovery_rate = 0;
-        let cancel_task = false;
-        function set(new_value, opts = {}) {
-            target_value = new_value;
-            const token = current_token = {};
-            if (value == null || opts.hard || (spring.stiffness >= 1 && spring.damping >= 1)) {
-                cancel_task = true; // cancel any running animation
-                last_time = now();
-                last_value = new_value;
-                store.set(value = target_value);
-                return Promise.resolve();
-            }
-            else if (opts.soft) {
-                const rate = opts.soft === true ? .5 : +opts.soft;
-                inv_mass_recovery_rate = 1 / (rate * 60);
-                inv_mass = 0; // infinite mass, unaffected by spring forces
-            }
-            if (!task) {
-                last_time = now();
-                cancel_task = false;
-                task = loop(now => {
-                    if (cancel_task) {
-                        cancel_task = false;
-                        task = null;
-                        return false;
-                    }
-                    inv_mass = Math.min(inv_mass + inv_mass_recovery_rate, 1);
-                    const ctx = {
-                        inv_mass,
-                        opts: spring,
-                        settled: true,
-                        dt: (now - last_time) * 60 / 1000
-                    };
-                    const next_value = tick_spring(ctx, last_value, value, target_value);
-                    last_time = now;
-                    last_value = value;
-                    store.set(value = next_value);
-                    if (ctx.settled) {
-                        task = null;
-                    }
-                    return !ctx.settled;
-                });
-            }
-            return new Promise(fulfil => {
-                task.promise.then(() => {
-                    if (token === current_token)
-                        fulfil();
-                });
-            });
-        }
-        const spring = {
-            set,
-            update: (fn, opts) => set(fn(target_value, value), opts),
-            subscribe: store.subscribe,
-            stiffness,
-            damping,
-            precision
-        };
-        return spring;
-    }
-
     /* src\ShotCargo.svelte generated by Svelte v3.48.0 */
 
-    const { console: console_1 } = globals;
+    const { console: console_1$1 } = globals;
     const file$4 = "src\\ShotCargo.svelte";
 
-    function create_fragment$6(ctx) {
+    function create_fragment$7(ctx) {
     	let div;
     	let svg;
     	let circle;
@@ -18102,7 +17952,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$6.name,
+    		id: create_fragment$7.name,
     		type: "component",
     		source: "",
     		ctx
@@ -18111,7 +17961,7 @@ var app = (function () {
     	return block;
     }
 
-    function instance$6($$self, $$props, $$invalidate) {
+    function instance$7($$self, $$props, $$invalidate) {
     	let $fieldBallCount;
     	let $score;
     	let $matchTime;
@@ -18192,7 +18042,7 @@ var app = (function () {
     	const writable_props = ['startX', 'startY', 'endX', 'endY', 'miss', 'id'];
 
     	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console_1.warn(`<ShotCargo> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console_1$1.warn(`<ShotCargo> was created with unknown prop '${key}'`);
     	});
 
     	$$self.$$set = $$props => {
@@ -18281,7 +18131,7 @@ var app = (function () {
     	constructor(options) {
     		super(options);
 
-    		init(this, options, instance$6, create_fragment$6, safe_not_equal, {
+    		init(this, options, instance$7, create_fragment$7, safe_not_equal, {
     			startX: 3,
     			startY: 4,
     			endX: 5,
@@ -18294,18 +18144,18 @@ var app = (function () {
     			component: this,
     			tagName: "ShotCargo",
     			options,
-    			id: create_fragment$6.name
+    			id: create_fragment$7.name
     		});
 
     		const { ctx } = this.$$;
     		const props = options.props || {};
 
     		if (/*miss*/ ctx[7] === undefined && !('miss' in props)) {
-    			console_1.warn("<ShotCargo> was created without expected prop 'miss'");
+    			console_1$1.warn("<ShotCargo> was created without expected prop 'miss'");
     		}
 
     		if (/*id*/ ctx[8] === undefined && !('id' in props)) {
-    			console_1.warn("<ShotCargo> was created without expected prop 'id'");
+    			console_1$1.warn("<ShotCargo> was created without expected prop 'id'");
     		}
     	}
 
@@ -18358,344 +18208,6 @@ var app = (function () {
     	}
     }
 
-    /* src\Cargo.svelte generated by Svelte v3.48.0 */
-    const file$3 = "src\\Cargo.svelte";
-
-    function create_fragment$5(ctx) {
-    	let div;
-    	let svg;
-    	let circle;
-
-    	const block = {
-    		c: function create() {
-    			div = element("div");
-    			svg = svg_element("svg");
-    			circle = svg_element("circle");
-    			attr_dev(circle, "cx", "60");
-    			attr_dev(circle, "cy", "60.834");
-    			attr_dev(circle, "r", /*ballSize*/ ctx[1]);
-    			set_style(circle, "fill", "red");
-    			add_location(circle, file$3, 140, 0, 4233);
-    			attr_dev(svg, "id", "Layer_1");
-    			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
-    			attr_dev(svg, "xmlns:xlink", "http://www.w3.org/1999/xlink");
-    			attr_dev(svg, "width", "" + (/*ballSize*/ ctx[1] + "px"));
-    			attr_dev(svg, "height", "" + (/*ballSize*/ ctx[1] + "px"));
-    			attr_dev(svg, "viewBox", "0 0 120 120");
-    			attr_dev(svg, "enable-background", "new 0 0 120 120");
-    			attr_dev(svg, "xml:space", "preserve");
-    			add_location(svg, file$3, 138, 4, 4003);
-    			attr_dev(div, "class", "fixed");
-    			set_style(div, "transform", "translate(" + (/*coords*/ ctx[0][0] - /*ballSize*/ ctx[1] / 2) + "px," + (/*coords*/ ctx[0][1] - /*ballSize*/ ctx[1] / 2) + "px)");
-    			add_location(div, file$3, 135, 0, 3893);
-    		},
-    		l: function claim(nodes) {
-    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
-    		},
-    		m: function mount(target, anchor) {
-    			insert_dev(target, div, anchor);
-    			append_dev(div, svg);
-    			append_dev(svg, circle);
-    		},
-    		p: function update(ctx, [dirty]) {
-    			if (dirty & /*coords*/ 1) {
-    				set_style(div, "transform", "translate(" + (/*coords*/ ctx[0][0] - /*ballSize*/ ctx[1] / 2) + "px," + (/*coords*/ ctx[0][1] - /*ballSize*/ ctx[1] / 2) + "px)");
-    			}
-    		},
-    		i: noop$1,
-    		o: noop$1,
-    		d: function destroy(detaching) {
-    			if (detaching) detach_dev(div);
-    		}
-    	};
-
-    	dispatch_dev("SvelteRegisterBlock", {
-    		block,
-    		id: create_fragment$5.name,
-    		type: "component",
-    		source: "",
-    		ctx
-    	});
-
-    	return block;
-    }
-
-    function inside$1(point, vs) {
-    	let x = point[0], y = point[1];
-    	let inside = false;
-
-    	for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
-    		let xi = vs[i][0], yi = vs[i][1];
-    		let xj = vs[j][0], yj = vs[j][1];
-    		let intersect = yi > y !== yj > y && x < (xj - xi) * (y - yi) / (yj - yi) + xi;
-    		if (intersect) inside = !inside;
-    	}
-
-    	return inside;
-    }
-
-    function instance$5($$self, $$props, $$invalidate) {
-    	let $fieldHeight;
-    	let $fieldWidth;
-    	let $globalSpeedY;
-    	let $globalSpeedX;
-    	let $ballBoxBackLeft;
-    	let $ballBoxBackRight;
-    	let $ballBoxFrontRight;
-    	let $ballBoxFrontLeft;
-    	let $ballsInRobot;
-    	let $intake;
-    	validate_store(fieldHeight, 'fieldHeight');
-    	component_subscribe($$self, fieldHeight, $$value => $$invalidate(7, $fieldHeight = $$value));
-    	validate_store(fieldWidth, 'fieldWidth');
-    	component_subscribe($$self, fieldWidth, $$value => $$invalidate(8, $fieldWidth = $$value));
-    	validate_store(globalSpeedY, 'globalSpeedY');
-    	component_subscribe($$self, globalSpeedY, $$value => $$invalidate(9, $globalSpeedY = $$value));
-    	validate_store(globalSpeedX, 'globalSpeedX');
-    	component_subscribe($$self, globalSpeedX, $$value => $$invalidate(10, $globalSpeedX = $$value));
-    	validate_store(ballBoxBackLeft, 'ballBoxBackLeft');
-    	component_subscribe($$self, ballBoxBackLeft, $$value => $$invalidate(11, $ballBoxBackLeft = $$value));
-    	validate_store(ballBoxBackRight, 'ballBoxBackRight');
-    	component_subscribe($$self, ballBoxBackRight, $$value => $$invalidate(12, $ballBoxBackRight = $$value));
-    	validate_store(ballBoxFrontRight, 'ballBoxFrontRight');
-    	component_subscribe($$self, ballBoxFrontRight, $$value => $$invalidate(13, $ballBoxFrontRight = $$value));
-    	validate_store(ballBoxFrontLeft, 'ballBoxFrontLeft');
-    	component_subscribe($$self, ballBoxFrontLeft, $$value => $$invalidate(14, $ballBoxFrontLeft = $$value));
-    	validate_store(ballsInRobot, 'ballsInRobot');
-    	component_subscribe($$self, ballsInRobot, $$value => $$invalidate(15, $ballsInRobot = $$value));
-    	validate_store(intake, 'intake');
-    	component_subscribe($$self, intake, $$value => $$invalidate(16, $intake = $$value));
-    	let { $$slots: slots = {}, $$scope } = $$props;
-    	validate_slots('Cargo', slots, []);
-    	const dispatch = createEventDispatcher();
-    	let { coords } = $$props;
-    	let milliCount = 0;
-    	let ballSize = 55;
-    	let speedX = 0;
-    	let speedY = 0;
-    	let speedDecay = 0.15;
-    	const countUp = () => $$invalidate(2, milliCount += 1.8);
-    	let insideIntake = false;
-    	let insideRobot = false;
-    	onInterval(countUp, 15);
-
-    	function intook() {
-    		speedX = 0;
-    		speedY = 0;
-    		dispatch('intake', { x: coords[0], y: coords[1] });
-    	}
-
-    	function checkInside() {
-    		let polygon = [
-    			[$intake.x1, $intake.y1],
-    			[$intake.x2, $intake.y2],
-    			[$intake.x3, $intake.y3],
-    			[$intake.x4, $intake.y4]
-    		];
-
-    		insideIntake = inside$1(coords, polygon);
-
-    		if (insideIntake && $ballsInRobot < 2) {
-    			intook();
-    		}
-    	}
-
-    	function pushBall() {
-    		let robotPolygon = [
-    			[$ballBoxFrontLeft.x, $ballBoxFrontLeft.y],
-    			[$ballBoxFrontRight.x, $ballBoxFrontRight.y],
-    			[$ballBoxBackRight.x, $ballBoxBackRight.y],
-    			[$ballBoxBackLeft.x, $ballBoxBackLeft.y]
-    		];
-
-    		insideRobot = inside$1(coords, robotPolygon);
-
-    		if (insideRobot) {
-    			if (Math.abs($globalSpeedX) > Math.abs(speedX) || Math.sign($globalSpeedX) !== Math.sign(speedX)) {
-    				speedX = $globalSpeedX;
-    			}
-
-    			if (Math.abs($globalSpeedY) > Math.abs(speedY) || Math.sign($globalSpeedY) !== Math.sign(speedY)) {
-    				speedY = $globalSpeedY;
-    			}
-    		}
-
-    		// if(!inside([[coords[0]+speedX],[coords[1]-speedY]],robotPolygon)) {
-    		$$invalidate(0, coords[0] += speedX, coords);
-
-    		$$invalidate(0, coords[1] -= speedY, coords);
-
-    		// }
-    		if (speedX > 0) {
-    			speedX -= speedDecay;
-    		}
-
-    		if (speedX < 0) {
-    			speedX += speedDecay;
-    		}
-
-    		if (speedY > 0) {
-    			speedY -= speedDecay;
-    		}
-
-    		if (speedY < 0) {
-    			speedY += speedDecay;
-    		}
-
-    		isWhereItShouldntBe();
-    	}
-
-    	function isWhereItShouldntBe() {
-    		if (coords[0] <= ballSize / 2 && coords[0] !== -100) {
-    			$$invalidate(0, coords[0] = ballSize / 2, coords);
-    			speedX *= -1;
-    		}
-
-    		if (coords[0] >= $fieldWidth - ballSize / 2) {
-    			$$invalidate(0, coords[0] = $fieldWidth - ballSize / 2, coords);
-    			speedX *= -1;
-    		}
-
-    		if (coords[1] <= ballSize / 2 && coords[1] !== -100) {
-    			$$invalidate(0, coords[1] = ballSize / 2, coords);
-    			speedY *= -1;
-    		}
-
-    		if (coords[1] >= $fieldHeight - ballSize / 2) {
-    			$$invalidate(0, coords[1] = $fieldHeight - ballSize / 2, coords);
-    			speedY *= -1;
-    		}
-
-    		if (Math.sqrt((coords[0] - $fieldWidth / 2) ** 2 + (coords[1] - $fieldHeight / 2) ** 2) < 120 + ballSize / 2) {
-    			speedX *= -1;
-    			speedY *= -1;
-
-    			if (speedX > 0) {
-    				speedX -= speedDecay;
-    			}
-
-    			if (speedX < 0) {
-    				speedX += speedDecay;
-    			}
-
-    			if (speedY > 0) {
-    				speedY -= speedDecay;
-    			}
-
-    			if (speedY < 0) {
-    				speedY += speedDecay;
-    			}
-    		}
-    	}
-
-    	const writable_props = ['coords'];
-
-    	Object.keys($$props).forEach(key => {
-    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Cargo> was created with unknown prop '${key}'`);
-    	});
-
-    	$$self.$$set = $$props => {
-    		if ('coords' in $$props) $$invalidate(0, coords = $$props.coords);
-    	};
-
-    	$$self.$capture_state = () => ({
-    		onInterval,
-    		ballBoxBackLeft,
-    		ballBoxBackRight,
-    		ballBoxFrontLeft,
-    		ballBoxFrontRight,
-    		ballsInRobot,
-    		fieldHeight,
-    		fieldWidth,
-    		globalSpeedX,
-    		globalSpeedY,
-    		globalX,
-    		globalY,
-    		intake,
-    		createEventDispatcher,
-    		dispatch,
-    		coords,
-    		milliCount,
-    		ballSize,
-    		speedX,
-    		speedY,
-    		speedDecay,
-    		countUp,
-    		insideIntake,
-    		insideRobot,
-    		intook,
-    		checkInside,
-    		inside: inside$1,
-    		pushBall,
-    		isWhereItShouldntBe,
-    		$fieldHeight,
-    		$fieldWidth,
-    		$globalSpeedY,
-    		$globalSpeedX,
-    		$ballBoxBackLeft,
-    		$ballBoxBackRight,
-    		$ballBoxFrontRight,
-    		$ballBoxFrontLeft,
-    		$ballsInRobot,
-    		$intake
-    	});
-
-    	$$self.$inject_state = $$props => {
-    		if ('coords' in $$props) $$invalidate(0, coords = $$props.coords);
-    		if ('milliCount' in $$props) $$invalidate(2, milliCount = $$props.milliCount);
-    		if ('ballSize' in $$props) $$invalidate(1, ballSize = $$props.ballSize);
-    		if ('speedX' in $$props) speedX = $$props.speedX;
-    		if ('speedY' in $$props) speedY = $$props.speedY;
-    		if ('speedDecay' in $$props) speedDecay = $$props.speedDecay;
-    		if ('insideIntake' in $$props) insideIntake = $$props.insideIntake;
-    		if ('insideRobot' in $$props) insideRobot = $$props.insideRobot;
-    	};
-
-    	if ($$props && "$$inject" in $$props) {
-    		$$self.$inject_state($$props.$$inject);
-    	}
-
-    	$$self.$$.update = () => {
-    		if ($$self.$$.dirty & /*milliCount*/ 4) {
-    			{
-    				checkInside();
-    				pushBall();
-    			}
-    		}
-    	};
-
-    	return [coords, ballSize, milliCount];
-    }
-
-    class Cargo extends SvelteComponentDev {
-    	constructor(options) {
-    		super(options);
-    		init(this, options, instance$5, create_fragment$5, safe_not_equal, { coords: 0 });
-
-    		dispatch_dev("SvelteRegisterComponent", {
-    			component: this,
-    			tagName: "Cargo",
-    			options,
-    			id: create_fragment$5.name
-    		});
-
-    		const { ctx } = this.$$;
-    		const props = options.props || {};
-
-    		if (/*coords*/ ctx[0] === undefined && !('coords' in props)) {
-    			console.warn("<Cargo> was created without expected prop 'coords'");
-    		}
-    	}
-
-    	get coords() {
-    		throw new Error("<Cargo>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-
-    	set coords(value) {
-    		throw new Error("<Cargo>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
-    	}
-    }
-
     function styleInject(css, ref) {
       if ( ref === void 0 ) ref = {};
       var insertAt = ref.insertAt;
@@ -18727,15 +18239,15 @@ var app = (function () {
     styleInject(css_248z$1);
 
     /* src\Robot.svelte generated by Svelte v3.48.0 */
-    const file$2 = "src\\Robot.svelte";
+    const file$3 = "src\\Robot.svelte";
 
     function get_each_context$1(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[69] = list[i];
+    	child_ctx[65] = list[i];
     	return child_ctx;
     }
 
-    // (471:0) {#each ballsShot as ball (ball.id)}
+    // (456:0) {#each ballsShot as ball (ball.id)}
     function create_each_block$1(key_2, ctx) {
     	let first;
     	let shotcargo;
@@ -18743,12 +18255,12 @@ var app = (function () {
 
     	shotcargo = new ShotCargo({
     			props: {
-    				startX: /*ball*/ ctx[69].startX,
-    				startY: /*ball*/ ctx[69].startY,
-    				endX: /*ball*/ ctx[69].endX,
-    				endY: /*ball*/ ctx[69].endY,
-    				miss: /*ball*/ ctx[69].miss,
-    				id: /*ball*/ ctx[69].id
+    				startX: /*ball*/ ctx[65].startX,
+    				startY: /*ball*/ ctx[65].startY,
+    				endX: /*ball*/ ctx[65].endX,
+    				endY: /*ball*/ ctx[65].endY,
+    				miss: /*ball*/ ctx[65].miss,
+    				id: /*ball*/ ctx[65].id
     			},
     			$$inline: true
     		});
@@ -18771,12 +18283,12 @@ var app = (function () {
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
     			const shotcargo_changes = {};
-    			if (dirty[0] & /*ballsShot*/ 8) shotcargo_changes.startX = /*ball*/ ctx[69].startX;
-    			if (dirty[0] & /*ballsShot*/ 8) shotcargo_changes.startY = /*ball*/ ctx[69].startY;
-    			if (dirty[0] & /*ballsShot*/ 8) shotcargo_changes.endX = /*ball*/ ctx[69].endX;
-    			if (dirty[0] & /*ballsShot*/ 8) shotcargo_changes.endY = /*ball*/ ctx[69].endY;
-    			if (dirty[0] & /*ballsShot*/ 8) shotcargo_changes.miss = /*ball*/ ctx[69].miss;
-    			if (dirty[0] & /*ballsShot*/ 8) shotcargo_changes.id = /*ball*/ ctx[69].id;
+    			if (dirty[0] & /*ballsShot*/ 8) shotcargo_changes.startX = /*ball*/ ctx[65].startX;
+    			if (dirty[0] & /*ballsShot*/ 8) shotcargo_changes.startY = /*ball*/ ctx[65].startY;
+    			if (dirty[0] & /*ballsShot*/ 8) shotcargo_changes.endX = /*ball*/ ctx[65].endX;
+    			if (dirty[0] & /*ballsShot*/ 8) shotcargo_changes.endY = /*ball*/ ctx[65].endY;
+    			if (dirty[0] & /*ballsShot*/ 8) shotcargo_changes.miss = /*ball*/ ctx[65].miss;
+    			if (dirty[0] & /*ballsShot*/ 8) shotcargo_changes.id = /*ball*/ ctx[65].id;
     			shotcargo.$set(shotcargo_changes);
     		},
     		i: function intro(local) {
@@ -18798,14 +18310,14 @@ var app = (function () {
     		block,
     		id: create_each_block$1.name,
     		type: "each",
-    		source: "(471:0) {#each ballsShot as ball (ball.id)}",
+    		source: "(456:0) {#each ballsShot as ball (ball.id)}",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$4(ctx) {
+    function create_fragment$6(ctx) {
     	let div0;
     	let t0;
     	let t1;
@@ -18830,7 +18342,7 @@ var app = (function () {
     	let dispose;
     	let each_value = /*ballsShot*/ ctx[3];
     	validate_each_argument(each_value);
-    	const get_key = ctx => /*ball*/ ctx[69].id;
+    	const get_key = ctx => /*ball*/ ctx[65].id;
     	validate_each_keys(ctx, each_value, get_each_context$1, get_key);
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -18862,11 +18374,11 @@ var app = (function () {
 
     			each_1_anchor = empty();
     			attr_dev(div0, "class", "fixed z-40");
-    			add_location(div0, file$2, 436, 0, 13907);
+    			add_location(div0, file$3, 421, 0, 13572);
     			attr_dev(path0, "stroke-linecap", "round");
     			attr_dev(path0, "stroke-linejoin", "round");
     			attr_dev(path0, "d", "M9 11l3-3m0 0l3 3m-3-3v8m0-13a9 9 0 110 18 9 9 0 010-18z");
-    			add_location(path0, file$2, 448, 8, 14401);
+    			add_location(path0, file$3, 433, 8, 14066);
     			attr_dev(svg0, "xmlns", "http://www.w3.org/2000/svg");
     			attr_dev(svg0, "class", "h-[90px] fixed");
     			attr_dev(svg0, "fill", "none");
@@ -18874,7 +18386,7 @@ var app = (function () {
     			attr_dev(svg0, "stroke", svg0_stroke_value = /*turretLockedOn*/ ctx[2] ? "green" : "white");
     			attr_dev(svg0, "stroke-width", "2");
     			set_style(svg0, "transform", "rotate(" + /*turretAngle*/ ctx[1] + "deg)");
-    			add_location(svg0, file$2, 446, 4, 14177);
+    			add_location(svg0, file$3, 431, 4, 13842);
     			attr_dev(circle, "cx", "10.5");
     			attr_dev(circle, "cy", "10.5");
 
@@ -18886,18 +18398,18 @@ var app = (function () {
     			attr_dev(circle, "stroke", "currentColor");
     			attr_dev(circle, "stroke-linecap", "round");
     			attr_dev(circle, "stroke-linejoin", "round");
-    			add_location(circle, file$2, 455, 8, 14722);
+    			add_location(circle, file$3, 440, 8, 14387);
     			attr_dev(svg1, "class", "fixed ml-[100px] mt-[100px]");
     			attr_dev(svg1, "width", "30px");
     			attr_dev(svg1, "height", "30px");
     			attr_dev(svg1, "viewBox", "0 0 21 21");
     			attr_dev(svg1, "stroke-width", "3");
     			attr_dev(svg1, "xmlns", "http://www.w3.org/2000/svg");
-    			add_location(svg1, file$2, 452, 4, 14551);
+    			add_location(svg1, file$3, 437, 4, 14216);
     			attr_dev(path1, "stroke-linecap", "round");
     			attr_dev(path1, "stroke-linejoin", "round");
     			attr_dev(path1, "d", "M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z");
-    			add_location(path1, file$2, 463, 12, 15153);
+    			add_location(path1, file$3, 448, 12, 14818);
     			attr_dev(svg2, "id", "intake");
     			attr_dev(svg2, "xmlns", "http://www.w3.org/2000/svg");
     			attr_dev(svg2, "class", "fixed -mt-[158px] w-[160px] -ml-[80px]");
@@ -18905,12 +18417,12 @@ var app = (function () {
     			attr_dev(svg2, "fill", "none");
     			attr_dev(svg2, "stroke", "white");
     			attr_dev(svg2, "stroke-width", "2");
-    			add_location(svg2, file$2, 461, 8, 14962);
-    			add_location(intake_1, file$2, 460, 4, 14944);
+    			add_location(svg2, file$3, 446, 8, 14627);
+    			add_location(intake_1, file$3, 445, 4, 14609);
     			attr_dev(div1, "class", "box grid h-screen place-items-center svelte-1fgtq5x");
     			attr_dev(div1, "id", "robot");
     			set_style(div1, "transform", "translate(" + (/*$coords*/ ctx[4].x - 65) + "px," + (/*$coords*/ ctx[4].y - 65) + "px) rotate(" + /*rot*/ ctx[0] + "deg)");
-    			add_location(div1, file$2, 442, 0, 14015);
+    			add_location(div1, file$3, 427, 0, 13680);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -19011,7 +18523,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$4.name,
+    		id: create_fragment$6.name,
     		type: "component",
     		source: "",
     		ctx
@@ -19062,7 +18574,7 @@ var app = (function () {
     	return [nx, ny];
     }
 
-    function instance$4($$self, $$props, $$invalidate) {
+    function instance$6($$self, $$props, $$invalidate) {
     	let $vizRing;
     	let $centerCoords;
     	let $coords;
@@ -19073,12 +18585,8 @@ var app = (function () {
     	let $fieldHeight;
     	let $globalSpeedY;
     	let $globalSpeedX;
-    	let $ballBoxBackRight;
-    	let $ballBoxBackLeft;
-    	let $ballBoxFrontRight;
-    	let $ballBoxFrontLeft;
-    	let $globalY;
-    	let $globalX;
+    	let $robotBallBox;
+    	let $robotCoord;
     	let $globalAngle;
     	let $reset;
     	validate_store(vizRing, 'vizRing');
@@ -19097,27 +18605,19 @@ var app = (function () {
     	component_subscribe($$self, globalSpeedY, $$value => $$invalidate(36, $globalSpeedY = $$value));
     	validate_store(globalSpeedX, 'globalSpeedX');
     	component_subscribe($$self, globalSpeedX, $$value => $$invalidate(37, $globalSpeedX = $$value));
-    	validate_store(ballBoxBackRight, 'ballBoxBackRight');
-    	component_subscribe($$self, ballBoxBackRight, $$value => $$invalidate(38, $ballBoxBackRight = $$value));
-    	validate_store(ballBoxBackLeft, 'ballBoxBackLeft');
-    	component_subscribe($$self, ballBoxBackLeft, $$value => $$invalidate(39, $ballBoxBackLeft = $$value));
-    	validate_store(ballBoxFrontRight, 'ballBoxFrontRight');
-    	component_subscribe($$self, ballBoxFrontRight, $$value => $$invalidate(40, $ballBoxFrontRight = $$value));
-    	validate_store(ballBoxFrontLeft, 'ballBoxFrontLeft');
-    	component_subscribe($$self, ballBoxFrontLeft, $$value => $$invalidate(41, $ballBoxFrontLeft = $$value));
-    	validate_store(globalY, 'globalY');
-    	component_subscribe($$self, globalY, $$value => $$invalidate(42, $globalY = $$value));
-    	validate_store(globalX, 'globalX');
-    	component_subscribe($$self, globalX, $$value => $$invalidate(43, $globalX = $$value));
+    	validate_store(robotBallBox, 'robotBallBox');
+    	component_subscribe($$self, robotBallBox, $$value => $$invalidate(38, $robotBallBox = $$value));
+    	validate_store(robotCoord, 'robotCoord');
+    	component_subscribe($$self, robotCoord, $$value => $$invalidate(39, $robotCoord = $$value));
     	validate_store(globalAngle, 'globalAngle');
-    	component_subscribe($$self, globalAngle, $$value => $$invalidate(44, $globalAngle = $$value));
+    	component_subscribe($$self, globalAngle, $$value => $$invalidate(40, $globalAngle = $$value));
     	validate_store(reset, 'reset');
-    	component_subscribe($$self, reset, $$value => $$invalidate(12, $reset = $$value));
+    	component_subscribe($$self, reset, $$value => $$invalidate(14, $reset = $$value));
     	let { $$slots: slots = {}, $$scope } = $$props;
     	validate_slots('Robot', slots, []);
     	let key;
-    	let x = 100;
-    	let y = 100;
+    	let { x = 100 } = $$props;
+    	let { y = 100 } = $$props;
     	let speedModifier = 0.3;
 
     	let shiftDown = false,
@@ -19141,14 +18641,8 @@ var app = (function () {
     	validate_store(centerCoords, 'centerCoords');
     	component_subscribe($$self, centerCoords, value => $$invalidate(31, $centerCoords = value));
     	let maxYAcc = 100, maxXAcc = 100;
-
-    	let maxRotAcc = 8,
-    		maxRotSpeed = 700,
-    		rotAcc = 0,
-    		rot = 0,
-    		rotDecay = 0.3,
-    		rotPace = 0.5;
-
+    	let maxRotAcc = 8, maxRotSpeed = 700, rotAcc = 0, rotDecay = 0.3, rotPace = 0.5;
+    	let { rot = 0 } = $$props;
     	let yDecay = 1, xDecay = 1;
     	let milliCount = 0;
     	let ballSize = 55;
@@ -19161,14 +18655,14 @@ var app = (function () {
     	let lastBallShot = -1000;
     	let ballsShot = [];
     	let activeBallID = 0;
-    	const countUp = () => $$invalidate(11, milliCount += 1);
+    	const countUp = () => $$invalidate(13, milliCount += 1);
     	onInterval(countUp, 15);
 
     	function resetBot() {
     		if ($reset) {
     			$$invalidate(1, turretAngle = 0);
-    			x = 100;
-    			y = 100;
+    			$$invalidate(11, x = 100);
+    			$$invalidate(12, y = 100);
     			yValue = 0;
     			xValue = 0;
     			$$invalidate(0, rot = 0);
@@ -19270,23 +18764,23 @@ var app = (function () {
     			xValue += xDecay;
     		}
 
-    		x += xValue * speedModifier;
-    		y -= yValue * speedModifier;
+    		$$invalidate(11, x += xValue * speedModifier);
+    		$$invalidate(12, y -= yValue * speedModifier);
 
     		if (x > $fieldWidth - 65) {
-    			x = $fieldWidth - 65;
+    			$$invalidate(11, x = $fieldWidth - 65);
     		}
 
     		if (y > $fieldHeight - 65) {
-    			y = $fieldHeight - 65;
+    			$$invalidate(12, y = $fieldHeight - 65);
     		}
 
     		if (x - 65 < 0) {
-    			x = 65;
+    			$$invalidate(11, x = 65);
     		}
 
     		if (y - 65 < 0) {
-    			y = 65;
+    			$$invalidate(12, y = 65);
     		}
 
     		let xValid = false, yValid = false;
@@ -19317,46 +18811,25 @@ var app = (function () {
     			yValue = 0;
     		}
 
-    		x = $coords.x;
-    		y = $coords.y;
-    		set_store_value(globalX, $globalX = x, $globalX);
-    		set_store_value(globalY, $globalY = y, $globalY);
+    		$$invalidate(11, x = $coords.x);
+    		$$invalidate(12, y = $coords.y);
+    		set_store_value(robotCoord, $robotCoord.x = x, $robotCoord);
+    		set_store_value(robotCoord, $robotCoord.y = y, $robotCoord);
     		let ballGap = ballSize / 2;
 
     		set_store_value(
-    			ballBoxFrontLeft,
-    			$ballBoxFrontLeft = {
-    				x: rotate(x, y, x - 65 - ballGap, y - 65 - ballGap, rot * -1)[0],
-    				y: rotate(x, y, x - 65 - ballGap, y - 65 - ballGap, rot * -1)[1]
+    			robotBallBox,
+    			$robotBallBox = {
+    				x1: rotate(x, y, x - 65 - ballGap, y - 65 - ballGap, rot * -1)[0],
+    				x2: rotate(x, y, x + 65 + ballGap, y - 65 - ballGap, rot * -1)[0],
+    				x3: rotate(x, y, x + 65 + ballGap, y + 65 + ballGap, rot * -1)[0],
+    				x4: rotate(x, y, x - 65 - ballGap, y + 65 + ballGap, rot * -1)[0],
+    				y1: rotate(x, y, x - 65 - ballGap, y - 65 - ballGap, rot * -1)[1],
+    				y2: rotate(x, y, x + 65 + ballGap, y - 65 - ballGap, rot * -1)[1],
+    				y3: rotate(x, y, x + 65 + ballGap, y + 65 + ballGap, rot * -1)[1],
+    				y4: rotate(x, y, x - 65 - ballGap, y + 65 + ballGap, rot * -1)[1]
     			},
-    			$ballBoxFrontLeft
-    		);
-
-    		set_store_value(
-    			ballBoxFrontRight,
-    			$ballBoxFrontRight = {
-    				x: rotate(x, y, x + 65 + ballGap, y - 65 - ballGap, rot * -1)[0],
-    				y: rotate(x, y, x + 65 + ballGap, y - 65 - ballGap, rot * -1)[1]
-    			},
-    			$ballBoxFrontRight
-    		);
-
-    		set_store_value(
-    			ballBoxBackLeft,
-    			$ballBoxBackLeft = {
-    				x: rotate(x, y, x - 65 - ballGap, y + 65 + ballGap, rot * -1)[0],
-    				y: rotate(x, y, x - 65 - ballGap, y + 65 + ballGap, rot * -1)[1]
-    			},
-    			$ballBoxBackLeft
-    		);
-
-    		set_store_value(
-    			ballBoxBackRight,
-    			$ballBoxBackRight = {
-    				x: rotate(x, y, x + 65 + ballGap, y + 65 + ballGap, rot * -1)[0],
-    				y: rotate(x, y, x + 65 + ballGap, y + 65 + ballGap, rot * -1)[1]
-    			},
-    			$ballBoxBackRight
+    			$robotBallBox
     		);
 
     		set_store_value(globalSpeedX, $globalSpeedX = xValue * speedModifier, $globalSpeedX);
@@ -19544,23 +19017,23 @@ var app = (function () {
     		}
     	}
 
-    	const writable_props = [];
+    	const writable_props = ['x', 'y', 'rot'];
 
     	Object.keys($$props).forEach(key => {
     		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Robot> was created with unknown prop '${key}'`);
     	});
+
+    	$$self.$$set = $$props => {
+    		if ('x' in $$props) $$invalidate(11, x = $$props.x);
+    		if ('y' in $$props) $$invalidate(12, y = $$props.y);
+    		if ('rot' in $$props) $$invalidate(0, rot = $$props.rot);
+    	};
 
     	$$self.$capture_state = () => ({
     		onInterval,
     		reset,
     		globalSpeedX,
     		globalSpeedY,
-    		ballBoxFrontLeft,
-    		ballBoxFrontRight,
-    		ballBoxBackLeft,
-    		ballBoxBackRight,
-    		globalX,
-    		globalY,
     		fieldWidth,
     		fieldHeight,
     		intake,
@@ -19569,10 +19042,10 @@ var app = (function () {
     		vizRing,
     		storeTurretAngle,
     		globalAngle,
-    		spring,
+    		robotBallBox,
+    		robotCoord,
     		writable,
     		ShotCargo,
-    		Cargo,
     		key,
     		x,
     		y,
@@ -19598,9 +19071,9 @@ var app = (function () {
     		maxRotAcc,
     		maxRotSpeed,
     		rotAcc,
-    		rot,
     		rotDecay,
     		rotPace,
+    		rot,
     		yDecay,
     		xDecay,
     		milliCount,
@@ -19636,20 +19109,16 @@ var app = (function () {
     		$fieldHeight,
     		$globalSpeedY,
     		$globalSpeedX,
-    		$ballBoxBackRight,
-    		$ballBoxBackLeft,
-    		$ballBoxFrontRight,
-    		$ballBoxFrontLeft,
-    		$globalY,
-    		$globalX,
+    		$robotBallBox,
+    		$robotCoord,
     		$globalAngle,
     		$reset
     	});
 
     	$$self.$inject_state = $$props => {
     		if ('key' in $$props) key = $$props.key;
-    		if ('x' in $$props) x = $$props.x;
-    		if ('y' in $$props) y = $$props.y;
+    		if ('x' in $$props) $$invalidate(11, x = $$props.x);
+    		if ('y' in $$props) $$invalidate(12, y = $$props.y);
     		if ('speedModifier' in $$props) speedModifier = $$props.speedModifier;
     		if ('shiftDown' in $$props) shiftDown = $$props.shiftDown;
     		if ('wDown' in $$props) wDown = $$props.wDown;
@@ -19671,12 +19140,12 @@ var app = (function () {
     		if ('maxRotAcc' in $$props) maxRotAcc = $$props.maxRotAcc;
     		if ('maxRotSpeed' in $$props) maxRotSpeed = $$props.maxRotSpeed;
     		if ('rotAcc' in $$props) rotAcc = $$props.rotAcc;
-    		if ('rot' in $$props) $$invalidate(0, rot = $$props.rot);
     		if ('rotDecay' in $$props) rotDecay = $$props.rotDecay;
     		if ('rotPace' in $$props) rotPace = $$props.rotPace;
+    		if ('rot' in $$props) $$invalidate(0, rot = $$props.rot);
     		if ('yDecay' in $$props) yDecay = $$props.yDecay;
     		if ('xDecay' in $$props) xDecay = $$props.xDecay;
-    		if ('milliCount' in $$props) $$invalidate(11, milliCount = $$props.milliCount);
+    		if ('milliCount' in $$props) $$invalidate(13, milliCount = $$props.milliCount);
     		if ('ballSize' in $$props) ballSize = $$props.ballSize;
     		if ('turretAngle' in $$props) $$invalidate(1, turretAngle = $$props.turretAngle);
     		if ('turretSpeed' in $$props) turretSpeed = $$props.turretSpeed;
@@ -19694,7 +19163,7 @@ var app = (function () {
     	}
 
     	$$self.$$.update = () => {
-    		if ($$self.$$.dirty[0] & /*$reset, milliCount*/ 6144) {
+    		if ($$self.$$.dirty[0] & /*$reset, milliCount*/ 24576) {
     			{
     				resetBot();
     				calcMovement();
@@ -19717,6 +19186,8 @@ var app = (function () {
     		on_key_down,
     		on_key_up,
     		cargoScored,
+    		x,
+    		y,
     		milliCount,
     		$reset
     	];
@@ -19725,14 +19196,377 @@ var app = (function () {
     class Robot extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$4, create_fragment$4, safe_not_equal, {}, null, [-1, -1, -1]);
+    		init(this, options, instance$6, create_fragment$6, safe_not_equal, { x: 11, y: 12, rot: 0 }, null, [-1, -1, -1]);
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "Robot",
     			options,
-    			id: create_fragment$4.name
+    			id: create_fragment$6.name
     		});
+    	}
+
+    	get x() {
+    		throw new Error("<Robot>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set x(value) {
+    		throw new Error("<Robot>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get y() {
+    		throw new Error("<Robot>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set y(value) {
+    		throw new Error("<Robot>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get rot() {
+    		throw new Error("<Robot>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set rot(value) {
+    		throw new Error("<Robot>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+    }
+
+    /* src\Cargo.svelte generated by Svelte v3.48.0 */
+    const file$2 = "src\\Cargo.svelte";
+
+    function create_fragment$5(ctx) {
+    	let div;
+    	let svg;
+    	let circle;
+
+    	const block = {
+    		c: function create() {
+    			div = element("div");
+    			svg = svg_element("svg");
+    			circle = svg_element("circle");
+    			attr_dev(circle, "cx", "60");
+    			attr_dev(circle, "cy", "60.834");
+    			attr_dev(circle, "r", /*ballSize*/ ctx[1]);
+    			set_style(circle, "fill", "red");
+    			add_location(circle, file$2, 134, 0, 4084);
+    			attr_dev(svg, "id", "Layer_1");
+    			attr_dev(svg, "xmlns", "http://www.w3.org/2000/svg");
+    			attr_dev(svg, "xmlns:xlink", "http://www.w3.org/1999/xlink");
+    			attr_dev(svg, "width", "" + (/*ballSize*/ ctx[1] + "px"));
+    			attr_dev(svg, "height", "" + (/*ballSize*/ ctx[1] + "px"));
+    			attr_dev(svg, "viewBox", "0 0 120 120");
+    			attr_dev(svg, "enable-background", "new 0 0 120 120");
+    			attr_dev(svg, "xml:space", "preserve");
+    			add_location(svg, file$2, 132, 4, 3854);
+    			attr_dev(div, "class", "fixed");
+    			set_style(div, "transform", "translate(" + (/*coords*/ ctx[0][0] - /*ballSize*/ ctx[1] / 2) + "px," + (/*coords*/ ctx[0][1] - /*ballSize*/ ctx[1] / 2) + "px)");
+    			add_location(div, file$2, 129, 0, 3744);
+    		},
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: function mount(target, anchor) {
+    			insert_dev(target, div, anchor);
+    			append_dev(div, svg);
+    			append_dev(svg, circle);
+    		},
+    		p: function update(ctx, [dirty]) {
+    			if (dirty & /*coords*/ 1) {
+    				set_style(div, "transform", "translate(" + (/*coords*/ ctx[0][0] - /*ballSize*/ ctx[1] / 2) + "px," + (/*coords*/ ctx[0][1] - /*ballSize*/ ctx[1] / 2) + "px)");
+    			}
+    		},
+    		i: noop$1,
+    		o: noop$1,
+    		d: function destroy(detaching) {
+    			if (detaching) detach_dev(div);
+    		}
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$5.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function inside$1(point, vs) {
+    	let x = point[0], y = point[1];
+    	let inside = false;
+
+    	for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+    		let xi = vs[i][0], yi = vs[i][1];
+    		let xj = vs[j][0], yj = vs[j][1];
+    		let intersect = yi > y !== yj > y && x < (xj - xi) * (y - yi) / (yj - yi) + xi;
+    		if (intersect) inside = !inside;
+    	}
+
+    	return inside;
+    }
+
+    function instance$5($$self, $$props, $$invalidate) {
+    	let $fieldHeight;
+    	let $fieldWidth;
+    	let $globalSpeedY;
+    	let $globalSpeedX;
+    	let $robotBallBox;
+    	let $ballsInRobot;
+    	let $intake;
+    	validate_store(fieldHeight, 'fieldHeight');
+    	component_subscribe($$self, fieldHeight, $$value => $$invalidate(7, $fieldHeight = $$value));
+    	validate_store(fieldWidth, 'fieldWidth');
+    	component_subscribe($$self, fieldWidth, $$value => $$invalidate(8, $fieldWidth = $$value));
+    	validate_store(globalSpeedY, 'globalSpeedY');
+    	component_subscribe($$self, globalSpeedY, $$value => $$invalidate(9, $globalSpeedY = $$value));
+    	validate_store(globalSpeedX, 'globalSpeedX');
+    	component_subscribe($$self, globalSpeedX, $$value => $$invalidate(10, $globalSpeedX = $$value));
+    	validate_store(robotBallBox, 'robotBallBox');
+    	component_subscribe($$self, robotBallBox, $$value => $$invalidate(11, $robotBallBox = $$value));
+    	validate_store(ballsInRobot, 'ballsInRobot');
+    	component_subscribe($$self, ballsInRobot, $$value => $$invalidate(12, $ballsInRobot = $$value));
+    	validate_store(intake, 'intake');
+    	component_subscribe($$self, intake, $$value => $$invalidate(13, $intake = $$value));
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('Cargo', slots, []);
+    	const dispatch = createEventDispatcher();
+    	let { coords } = $$props;
+    	let milliCount = 0;
+    	let ballSize = 55;
+    	let { speedX = 0 } = $$props;
+    	let { speedY = 0 } = $$props;
+    	let speedDecay = 0.15;
+    	const countUp = () => $$invalidate(4, milliCount += 1.8);
+    	let insideIntake = false;
+    	let insideRobot = false;
+    	onInterval(countUp, 15);
+
+    	function intook() {
+    		$$invalidate(2, speedX = 0);
+    		$$invalidate(3, speedY = 0);
+    		dispatch('intake', { x: coords[0], y: coords[1] });
+    	}
+
+    	function checkInside() {
+    		let polygon = [
+    			[$intake.x1, $intake.y1],
+    			[$intake.x2, $intake.y2],
+    			[$intake.x3, $intake.y3],
+    			[$intake.x4, $intake.y4]
+    		];
+
+    		insideIntake = inside$1(coords, polygon);
+
+    		if (insideIntake && $ballsInRobot < 2) {
+    			intook();
+    		}
+    	}
+
+    	function pushBall() {
+    		let robotPolygon = [
+    			[$robotBallBox.x1, $robotBallBox.y1],
+    			[$robotBallBox.x2, $robotBallBox.y2],
+    			[$robotBallBox.x3, $robotBallBox.y3],
+    			[$robotBallBox.x4, $robotBallBox.y4]
+    		];
+
+    		insideRobot = inside$1(coords, robotPolygon);
+
+    		if (insideRobot) {
+    			if (Math.abs($globalSpeedX) > Math.abs(speedX) || Math.sign($globalSpeedX) !== Math.sign(speedX)) {
+    				$$invalidate(2, speedX = $globalSpeedX);
+    			}
+
+    			if (Math.abs($globalSpeedY) > Math.abs(speedY) || Math.sign($globalSpeedY) !== Math.sign(speedY)) {
+    				$$invalidate(3, speedY = $globalSpeedY);
+    			}
+    		}
+
+    		// if(!inside([[coords[0]+speedX],[coords[1]-speedY]],robotPolygon)) {
+    		$$invalidate(0, coords[0] += speedX, coords);
+
+    		$$invalidate(0, coords[1] -= speedY, coords);
+
+    		// }
+    		if (speedX > 0) {
+    			$$invalidate(2, speedX -= speedDecay);
+    		}
+
+    		if (speedX < 0) {
+    			$$invalidate(2, speedX += speedDecay);
+    		}
+
+    		if (speedY > 0) {
+    			$$invalidate(3, speedY -= speedDecay);
+    		}
+
+    		if (speedY < 0) {
+    			$$invalidate(3, speedY += speedDecay);
+    		}
+
+    		isWhereItShouldntBe();
+    	}
+
+    	function isWhereItShouldntBe() {
+    		if (coords[0] <= ballSize / 2 && coords[0] !== -100) {
+    			$$invalidate(0, coords[0] = ballSize / 2, coords);
+    			$$invalidate(2, speedX *= -1);
+    		}
+
+    		if (coords[0] >= $fieldWidth - ballSize / 2) {
+    			$$invalidate(0, coords[0] = $fieldWidth - ballSize / 2, coords);
+    			$$invalidate(2, speedX *= -1);
+    		}
+
+    		if (coords[1] <= ballSize / 2 && coords[1] !== -100) {
+    			$$invalidate(0, coords[1] = ballSize / 2, coords);
+    			$$invalidate(3, speedY *= -1);
+    		}
+
+    		if (coords[1] >= $fieldHeight - ballSize / 2) {
+    			$$invalidate(0, coords[1] = $fieldHeight - ballSize / 2, coords);
+    			$$invalidate(3, speedY *= -1);
+    		}
+
+    		if (Math.sqrt((coords[0] - $fieldWidth / 2) ** 2 + (coords[1] - $fieldHeight / 2) ** 2) < 120 + ballSize / 2) {
+    			$$invalidate(2, speedX *= -1);
+    			$$invalidate(3, speedY *= -1);
+
+    			if (speedX > 0) {
+    				$$invalidate(2, speedX -= speedDecay);
+    			}
+
+    			if (speedX < 0) {
+    				$$invalidate(2, speedX += speedDecay);
+    			}
+
+    			if (speedY > 0) {
+    				$$invalidate(3, speedY -= speedDecay);
+    			}
+
+    			if (speedY < 0) {
+    				$$invalidate(3, speedY += speedDecay);
+    			}
+    		}
+    	}
+
+    	const writable_props = ['coords', 'speedX', 'speedY'];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console.warn(`<Cargo> was created with unknown prop '${key}'`);
+    	});
+
+    	$$self.$$set = $$props => {
+    		if ('coords' in $$props) $$invalidate(0, coords = $$props.coords);
+    		if ('speedX' in $$props) $$invalidate(2, speedX = $$props.speedX);
+    		if ('speedY' in $$props) $$invalidate(3, speedY = $$props.speedY);
+    	};
+
+    	$$self.$capture_state = () => ({
+    		onInterval,
+    		ballsInRobot,
+    		fieldHeight,
+    		fieldWidth,
+    		globalSpeedX,
+    		globalSpeedY,
+    		intake,
+    		robotBallBox,
+    		createEventDispatcher,
+    		dispatch,
+    		coords,
+    		milliCount,
+    		ballSize,
+    		speedX,
+    		speedY,
+    		speedDecay,
+    		countUp,
+    		insideIntake,
+    		insideRobot,
+    		intook,
+    		checkInside,
+    		inside: inside$1,
+    		pushBall,
+    		isWhereItShouldntBe,
+    		$fieldHeight,
+    		$fieldWidth,
+    		$globalSpeedY,
+    		$globalSpeedX,
+    		$robotBallBox,
+    		$ballsInRobot,
+    		$intake
+    	});
+
+    	$$self.$inject_state = $$props => {
+    		if ('coords' in $$props) $$invalidate(0, coords = $$props.coords);
+    		if ('milliCount' in $$props) $$invalidate(4, milliCount = $$props.milliCount);
+    		if ('ballSize' in $$props) $$invalidate(1, ballSize = $$props.ballSize);
+    		if ('speedX' in $$props) $$invalidate(2, speedX = $$props.speedX);
+    		if ('speedY' in $$props) $$invalidate(3, speedY = $$props.speedY);
+    		if ('speedDecay' in $$props) speedDecay = $$props.speedDecay;
+    		if ('insideIntake' in $$props) insideIntake = $$props.insideIntake;
+    		if ('insideRobot' in $$props) insideRobot = $$props.insideRobot;
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	$$self.$$.update = () => {
+    		if ($$self.$$.dirty & /*milliCount*/ 16) {
+    			{
+    				checkInside();
+    				pushBall();
+    			}
+    		}
+    	};
+
+    	return [coords, ballSize, speedX, speedY, milliCount];
+    }
+
+    class Cargo extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$5, create_fragment$5, safe_not_equal, { coords: 0, speedX: 2, speedY: 3 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "Cargo",
+    			options,
+    			id: create_fragment$5.name
+    		});
+
+    		const { ctx } = this.$$;
+    		const props = options.props || {};
+
+    		if (/*coords*/ ctx[0] === undefined && !('coords' in props)) {
+    			console.warn("<Cargo> was created without expected prop 'coords'");
+    		}
+    	}
+
+    	get coords() {
+    		throw new Error("<Cargo>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set coords(value) {
+    		throw new Error("<Cargo>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get speedX() {
+    		throw new Error("<Cargo>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set speedX(value) {
+    		throw new Error("<Cargo>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get speedY() {
+    		throw new Error("<Cargo>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set speedY(value) {
+    		throw new Error("<Cargo>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
     }
 
@@ -19740,18 +19574,18 @@ var app = (function () {
 
     function get_each_context(ctx, list, i) {
     	const child_ctx = ctx.slice();
-    	child_ctx[17] = list[i];
+    	child_ctx[14] = list[i];
     	return child_ctx;
     }
 
-    // (92:0) {#each floorBalls as ball (ball)}
+    // (90:0) {#each floorBalls as ball (ball)}
     function create_each_block(key_1, ctx) {
     	let first;
     	let cargo;
     	let current;
 
     	cargo = new Cargo({
-    			props: { coords: /*ball*/ ctx[17] },
+    			props: { coords: /*ball*/ ctx[14] },
     			$$inline: true
     		});
 
@@ -19773,7 +19607,7 @@ var app = (function () {
     		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
     			const cargo_changes = {};
-    			if (dirty & /*floorBalls*/ 1) cargo_changes.coords = /*ball*/ ctx[17];
+    			if (dirty & /*floorBalls*/ 1) cargo_changes.coords = /*ball*/ ctx[14];
     			cargo.$set(cargo_changes);
     		},
     		i: function intro(local) {
@@ -19795,21 +19629,21 @@ var app = (function () {
     		block,
     		id: create_each_block.name,
     		type: "each",
-    		source: "(92:0) {#each floorBalls as ball (ball)}",
+    		source: "(90:0) {#each floorBalls as ball (ball)}",
     		ctx
     	});
 
     	return block;
     }
 
-    function create_fragment$3(ctx) {
+    function create_fragment$4(ctx) {
     	let each_blocks = [];
     	let each_1_lookup = new Map();
     	let each_1_anchor;
     	let current;
     	let each_value = /*floorBalls*/ ctx[0];
     	validate_each_argument(each_value);
-    	const get_key = ctx => /*ball*/ ctx[17];
+    	const get_key = ctx => /*ball*/ ctx[14];
     	validate_each_keys(ctx, each_value, get_each_context, get_key);
 
     	for (let i = 0; i < each_value.length; i += 1) {
@@ -19874,7 +19708,7 @@ var app = (function () {
 
     	dispatch_dev("SvelteRegisterBlock", {
     		block,
-    		id: create_fragment$3.name,
+    		id: create_fragment$4.name,
     		type: "component",
     		source: "",
     		ctx
@@ -19897,32 +19731,23 @@ var app = (function () {
     	return inside;
     }
 
-    function instance$3($$self, $$props, $$invalidate) {
+    function instance$4($$self, $$props, $$invalidate) {
     	let $fieldBallCount;
-    	let $ballBoxBackLeft;
-    	let $ballBoxBackRight;
-    	let $ballBoxFrontRight;
-    	let $ballBoxFrontLeft;
     	let $fieldHeight;
     	let $fieldWidth;
+    	let $robotBallBox;
     	let $ballsInRobot;
     	let $reset;
     	validate_store(fieldBallCount, 'fieldBallCount');
     	component_subscribe($$self, fieldBallCount, $$value => $$invalidate(4, $fieldBallCount = $$value));
-    	validate_store(ballBoxBackLeft, 'ballBoxBackLeft');
-    	component_subscribe($$self, ballBoxBackLeft, $$value => $$invalidate(5, $ballBoxBackLeft = $$value));
-    	validate_store(ballBoxBackRight, 'ballBoxBackRight');
-    	component_subscribe($$self, ballBoxBackRight, $$value => $$invalidate(6, $ballBoxBackRight = $$value));
-    	validate_store(ballBoxFrontRight, 'ballBoxFrontRight');
-    	component_subscribe($$self, ballBoxFrontRight, $$value => $$invalidate(7, $ballBoxFrontRight = $$value));
-    	validate_store(ballBoxFrontLeft, 'ballBoxFrontLeft');
-    	component_subscribe($$self, ballBoxFrontLeft, $$value => $$invalidate(8, $ballBoxFrontLeft = $$value));
     	validate_store(fieldHeight, 'fieldHeight');
-    	component_subscribe($$self, fieldHeight, $$value => $$invalidate(9, $fieldHeight = $$value));
+    	component_subscribe($$self, fieldHeight, $$value => $$invalidate(5, $fieldHeight = $$value));
     	validate_store(fieldWidth, 'fieldWidth');
-    	component_subscribe($$self, fieldWidth, $$value => $$invalidate(10, $fieldWidth = $$value));
+    	component_subscribe($$self, fieldWidth, $$value => $$invalidate(6, $fieldWidth = $$value));
+    	validate_store(robotBallBox, 'robotBallBox');
+    	component_subscribe($$self, robotBallBox, $$value => $$invalidate(7, $robotBallBox = $$value));
     	validate_store(ballsInRobot, 'ballsInRobot');
-    	component_subscribe($$self, ballsInRobot, $$value => $$invalidate(11, $ballsInRobot = $$value));
+    	component_subscribe($$self, ballsInRobot, $$value => $$invalidate(8, $ballsInRobot = $$value));
     	validate_store(reset, 'reset');
     	component_subscribe($$self, reset, $$value => $$invalidate(3, $reset = $$value));
     	let { $$slots: slots = {}, $$scope } = $$props;
@@ -19958,18 +19783,16 @@ var app = (function () {
     				splice = true;
     			}
 
-    			if (Math.sqrt((floorBalls[i][0] - $fieldWidth / 2) ** 2 + (floorBalls[i][1] - $fieldHeight / 2) ** 2) < 135) {
-    				set_store_value(fieldBallCount, $fieldBallCount--, $fieldBallCount);
-    				splice = true;
-    			}
-
     			if (splice) {
     				floorBalls.splice(i, 1);
     				$$invalidate(0, floorBalls);
     			}
-    		}
-    	}
+    		} // for(let k=i+1; k< floorBalls.length; k++){
+    		//     if(Math.sqrt((floorBalls[i][0]-floorBalls[k][0])**2+(floorBalls[i][1]-floorBalls[k][1])**2)<55/2){
+    	} //
+    	//     }
 
+    	// }
     	function occupyField() {
     		while ($fieldBallCount < numberOfBallOnField) {
     			let x = Math.floor(Math.random() * $fieldWidth);
@@ -19977,11 +19800,11 @@ var app = (function () {
     			let ball = [x, y];
 
     			if (!floorBalls.includes(ball) && !inside(ball, [
-    				[$ballBoxFrontLeft.x, $ballBoxFrontLeft.y],
-    				[$ballBoxFrontRight.x, $ballBoxFrontRight.y],
-    				[$ballBoxBackRight.x, $ballBoxBackRight.y],
-    				[$ballBoxBackLeft.x, $ballBoxBackLeft.y]
-    			])) {
+    				[$robotBallBox.x1, $robotBallBox.y1],
+    				[$robotBallBox.x2, $robotBallBox.y2],
+    				[$robotBallBox.x3, $robotBallBox.y3],
+    				[$robotBallBox.x4, $robotBallBox.y4]
+    			]) && Math.sqrt((ball[0] - $fieldWidth / 2) ** 2 + (ball[1] - $fieldHeight / 2) ** 2) > 150) {
     				set_store_value(fieldBallCount, $fieldBallCount++, $fieldBallCount);
     				floorBalls.push(ball);
     				$$invalidate(0, floorBalls);
@@ -20001,14 +19824,8 @@ var app = (function () {
     		fieldHeight,
     		fieldWidth,
     		fieldBallCount,
-    		globalX,
-    		globalY,
-    		globalAngle,
-    		ballBoxFrontLeft,
-    		ballBoxFrontRight,
-    		ballBoxBackRight,
-    		ballBoxBackLeft,
     		reset,
+    		robotBallBox,
     		onInterval,
     		floorBalls,
     		milliCount,
@@ -20020,12 +19837,9 @@ var app = (function () {
     		clearIllegalBalls,
     		occupyField,
     		$fieldBallCount,
-    		$ballBoxBackLeft,
-    		$ballBoxBackRight,
-    		$ballBoxFrontRight,
-    		$ballBoxFrontLeft,
     		$fieldHeight,
     		$fieldWidth,
+    		$robotBallBox,
     		$ballsInRobot,
     		$reset
     	});
@@ -20056,11 +19870,85 @@ var app = (function () {
     class CargoOnField extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$3, create_fragment$3, safe_not_equal, {});
+    		init(this, options, instance$4, create_fragment$4, safe_not_equal, {});
 
     		dispatch_dev("SvelteRegisterComponent", {
     			component: this,
     			tagName: "CargoOnField",
+    			options,
+    			id: create_fragment$4.name
+    		});
+    	}
+    }
+
+    class robotData {
+        constructor(oof) {
+            this.oof = oof;
+        }
+
+
+    }
+
+    /* src\TeleRobot.svelte generated by Svelte v3.48.0 */
+
+    const { console: console_1 } = globals;
+
+    function create_fragment$3(ctx) {
+    	const block = {
+    		c: noop$1,
+    		l: function claim(nodes) {
+    			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
+    		},
+    		m: noop$1,
+    		p: noop$1,
+    		i: noop$1,
+    		o: noop$1,
+    		d: noop$1
+    	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$3.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
+    }
+
+    function instance$3($$self, $$props, $$invalidate) {
+    	let { $$slots: slots = {}, $$scope } = $$props;
+    	validate_slots('TeleRobot', slots, []);
+    	let test = new robotData("hi");
+    	console.log(test.oof);
+    	const writable_props = [];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== '$$' && key !== 'slot') console_1.warn(`<TeleRobot> was created with unknown prop '${key}'`);
+    	});
+
+    	$$self.$capture_state = () => ({ robotData, test });
+
+    	$$self.$inject_state = $$props => {
+    		if ('test' in $$props) test = $$props.test;
+    	};
+
+    	if ($$props && "$$inject" in $$props) {
+    		$$self.$inject_state($$props.$$inject);
+    	}
+
+    	return [];
+    }
+
+    class TeleRobot extends SvelteComponentDev {
+    	constructor(options) {
+    		super(options);
+    		init(this, options, instance$3, create_fragment$3, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "TeleRobot",
     			options,
     			id: create_fragment$3.name
     		});
@@ -20070,7 +19958,7 @@ var app = (function () {
     /* src\Field.svelte generated by Svelte v3.48.0 */
     const file$1 = "src\\Field.svelte";
 
-    // (58:8) {#if matchPercent>0}
+    // (61:8) {#if matchPercent>0}
     function create_if_block_1(ctx) {
     	let div;
 
@@ -20081,7 +19969,7 @@ var app = (function () {
     			set_style(div, "--value", /*matchPercent*/ ctx[0]);
     			set_style(div, "--size", "16rem");
     			set_style(div, "--thickness", "15px");
-    			add_location(div, file$1, 58, 8, 2649);
+    			add_location(div, file$1, 61, 8, 2742);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -20100,14 +19988,14 @@ var app = (function () {
     		block,
     		id: create_if_block_1.name,
     		type: "if",
-    		source: "(58:8) {#if matchPercent>0}",
+    		source: "(61:8) {#if matchPercent>0}",
     		ctx
     	});
 
     	return block;
     }
 
-    // (67:4) {#if $vizRing}
+    // (70:4) {#if $vizRing}
     function create_if_block(ctx) {
     	let div;
 
@@ -20117,7 +20005,7 @@ var app = (function () {
     			attr_dev(div, "class", "rounded-full border-green-500 border-4 border-dotted fixed z-90 ml-[450px]");
     			set_style(div, "height", /*$vizRingSize*/ ctx[5] + "px");
     			set_style(div, "width", /*$vizRingSize*/ ctx[5] + "px");
-    			add_location(div, file$1, 67, 4, 2935);
+    			add_location(div, file$1, 70, 4, 3028);
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div, anchor);
@@ -20140,7 +20028,7 @@ var app = (function () {
     		block,
     		id: create_if_block.name,
     		type: "if",
-    		source: "(67:4) {#if $vizRing}",
+    		source: "(70:4) {#if $vizRing}",
     		ctx
     	});
 
@@ -20149,35 +20037,38 @@ var app = (function () {
 
     function create_fragment$2(ctx) {
     	let div5;
+    	let telerobot;
+    	let t0;
     	let svg0;
     	let rect;
-    	let t0;
+    	let t1;
     	let div3;
     	let div0;
-    	let t1;
     	let t2;
+    	let t3;
     	let div1;
     	let button0;
     	let svg1;
     	let path0;
-    	let t3;
+    	let t4;
     	let div2;
     	let button1;
     	let svg2;
     	let path1;
-    	let t4;
+    	let t5;
     	let svg3;
     	let circle;
-    	let t5;
     	let t6;
+    	let t7;
     	let div4;
     	let cargoonfield;
-    	let t7;
-    	let robot;
     	let t8;
+    	let robot;
+    	let t9;
     	let current;
     	let mounted;
     	let dispose;
+    	telerobot = new TeleRobot({ $$inline: true });
     	let if_block0 = /*matchPercent*/ ctx[0] > 0 && create_if_block_1(ctx);
     	cargoonfield = new CargoOnField({ $$inline: true });
     	robot = new Robot({ $$inline: true });
@@ -20186,130 +20077,134 @@ var app = (function () {
     	const block = {
     		c: function create() {
     			div5 = element("div");
+    			create_component(telerobot.$$.fragment);
+    			t0 = space();
     			svg0 = svg_element("svg");
     			rect = svg_element("rect");
-    			t0 = space();
+    			t1 = space();
     			div3 = element("div");
     			div0 = element("div");
-    			t1 = text(/*$score*/ ctx[1]);
-    			t2 = space();
+    			t2 = text(/*$score*/ ctx[1]);
+    			t3 = space();
     			div1 = element("div");
     			button0 = element("button");
     			svg1 = svg_element("svg");
     			path0 = svg_element("path");
-    			t3 = space();
+    			t4 = space();
     			div2 = element("div");
     			button1 = element("button");
     			svg2 = svg_element("svg");
     			path1 = svg_element("path");
-    			t4 = space();
+    			t5 = space();
     			svg3 = svg_element("svg");
     			circle = svg_element("circle");
-    			t5 = space();
-    			if (if_block0) if_block0.c();
     			t6 = space();
+    			if (if_block0) if_block0.c();
+    			t7 = space();
     			div4 = element("div");
     			create_component(cargoonfield.$$.fragment);
-    			t7 = space();
-    			create_component(robot.$$.fragment);
     			t8 = space();
+    			create_component(robot.$$.fragment);
+    			t9 = space();
     			if (if_block1) if_block1.c();
     			attr_dev(rect, "width", /*$fieldWidth*/ ctx[2]);
     			attr_dev(rect, "height", /*$fieldHeight*/ ctx[3]);
     			set_style(rect, "fill", "black");
     			set_style(rect, "stroke-width", "3");
     			set_style(rect, "stroke", "white");
-    			add_location(rect, file$1, 29, 8, 888);
+    			add_location(rect, file$1, 32, 8, 981);
     			attr_dev(svg0, "width", /*$fieldWidth*/ ctx[2]);
     			attr_dev(svg0, "height", /*$fieldHeight*/ ctx[3]);
     			attr_dev(svg0, "class", "fixed");
-    			add_location(svg0, file$1, 28, 4, 817);
+    			add_location(svg0, file$1, 31, 4, 910);
     			attr_dev(div0, "class", "fixed");
     			set_style(div0, "transform", "translate(" + (/*$score*/ ctx[1].toString().length * -29 + 2) + "px,-85px)");
-    			add_location(div0, file$1, 33, 12, 1145);
+    			add_location(div0, file$1, 36, 12, 1238);
     			attr_dev(path0, "stroke-linecap", "round");
     			attr_dev(path0, "stroke-linejoin", "round");
     			attr_dev(path0, "d", "M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15");
-    			add_location(path0, file$1, 41, 20, 1608);
+    			add_location(path0, file$1, 44, 20, 1701);
     			attr_dev(svg1, "xmlns", "http://www.w3.org/2000/svg");
     			attr_dev(svg1, "class", "");
     			attr_dev(svg1, "fill", "none");
     			attr_dev(svg1, "viewBox", "0 0 24 24");
     			attr_dev(svg1, "stroke", "white");
     			attr_dev(svg1, "stroke-width", "3");
-    			add_location(svg1, file$1, 40, 16, 1473);
+    			add_location(svg1, file$1, 43, 16, 1566);
     			attr_dev(button0, "class", "btn btn-circle btn-accent btn-lg");
-    			add_location(button0, file$1, 39, 12, 1406);
+    			add_location(button0, file$1, 42, 12, 1499);
     			attr_dev(div1, "class", "fixed z-30");
     			set_style(div1, "transform", "translate(-70px,-1px)");
-    			add_location(div1, file$1, 37, 8, 1300);
+    			add_location(div1, file$1, 40, 8, 1393);
     			attr_dev(path1, "stroke-linecap", "round");
     			attr_dev(path1, "stroke-linejoin", "round");
     			attr_dev(path1, "d", "M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4");
-    			add_location(path1, file$1, 50, 20, 2141);
+    			add_location(path1, file$1, 53, 20, 2234);
     			attr_dev(svg2, "xmlns", "http://www.w3.org/2000/svg");
     			attr_dev(svg2, "class", "");
     			attr_dev(svg2, "fill", "none");
     			attr_dev(svg2, "viewBox", "0 0 24 24");
     			attr_dev(svg2, "stroke", "white");
     			attr_dev(svg2, "stroke-width", "2");
-    			add_location(svg2, file$1, 49, 16, 2006);
+    			add_location(svg2, file$1, 52, 16, 2099);
     			attr_dev(button1, "class", "btn btn-circle btn-accent btn-lg");
-    			add_location(button1, file$1, 48, 12, 1939);
+    			add_location(button1, file$1, 51, 12, 2032);
     			attr_dev(div2, "class", "fixed z-30");
     			set_style(div2, "transform", "translate(10px,-1px)");
-    			add_location(div2, file$1, 46, 8, 1854);
+    			add_location(div2, file$1, 49, 8, 1947);
     			attr_dev(circle, "fill", "none");
     			attr_dev(circle, "r", /*hubSize*/ ctx[6]);
     			attr_dev(circle, "stroke", "white");
     			attr_dev(circle, "stroke-linecap", "round");
     			attr_dev(circle, "stroke-width", "8");
     			attr_dev(circle, "stroke-linejoin", "round");
-    			add_location(circle, file$1, 56, 84, 2489);
+    			add_location(circle, file$1, 59, 84, 2582);
     			attr_dev(svg3, "xmlns", "http://www.w3.org/2000/svg");
     			attr_dev(svg3, "class", "fixed overflow-visible z-10");
-    			add_location(svg3, file$1, 56, 8, 2413);
+    			add_location(svg3, file$1, 59, 8, 2506);
     			attr_dev(div3, "class", "fixed z-20 text-8xl text-white font-bold");
     			set_style(div3, "transform", "translate(" + /*$fieldWidth*/ ctx[2] / 2 + "px," + /*$fieldHeight*/ ctx[3] / 2 + "px)");
-    			add_location(div3, file$1, 31, 4, 1003);
+    			add_location(div3, file$1, 34, 4, 1096);
     			attr_dev(div4, "class", "z-50 fixed");
-    			add_location(div4, file$1, 62, 4, 2838);
+    			add_location(div4, file$1, 65, 4, 2931);
     			attr_dev(div5, "class", "fixed text-center overflow-hidden");
     			set_style(div5, "width", /*$fieldWidth*/ ctx[2] + " height: " + fieldHeight);
-    			add_location(div5, file$1, 27, 0, 712);
+    			add_location(div5, file$1, 29, 0, 787);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
     		m: function mount(target, anchor) {
     			insert_dev(target, div5, anchor);
+    			mount_component(telerobot, div5, null);
+    			append_dev(div5, t0);
     			append_dev(div5, svg0);
     			append_dev(svg0, rect);
-    			append_dev(div5, t0);
+    			append_dev(div5, t1);
     			append_dev(div5, div3);
     			append_dev(div3, div0);
-    			append_dev(div0, t1);
-    			append_dev(div3, t2);
+    			append_dev(div0, t2);
+    			append_dev(div3, t3);
     			append_dev(div3, div1);
     			append_dev(div1, button0);
     			append_dev(button0, svg1);
     			append_dev(svg1, path0);
-    			append_dev(div3, t3);
+    			append_dev(div3, t4);
     			append_dev(div3, div2);
     			append_dev(div2, button1);
     			append_dev(button1, svg2);
     			append_dev(svg2, path1);
-    			append_dev(div3, t4);
+    			append_dev(div3, t5);
     			append_dev(div3, svg3);
     			append_dev(svg3, circle);
-    			append_dev(div3, t5);
+    			append_dev(div3, t6);
     			if (if_block0) if_block0.m(div3, null);
-    			append_dev(div5, t6);
+    			append_dev(div5, t7);
     			append_dev(div5, div4);
     			mount_component(cargoonfield, div4, null);
-    			append_dev(div4, t7);
+    			append_dev(div4, t8);
     			mount_component(robot, div4, null);
-    			append_dev(div5, t8);
+    			append_dev(div5, t9);
     			if (if_block1) if_block1.m(div5, null);
     			current = true;
 
@@ -20335,7 +20230,7 @@ var app = (function () {
     				attr_dev(svg0, "height", /*$fieldHeight*/ ctx[3]);
     			}
 
-    			if (!current || dirty & /*$score*/ 2) set_data_dev(t1, /*$score*/ ctx[1]);
+    			if (!current || dirty & /*$score*/ 2) set_data_dev(t2, /*$score*/ ctx[1]);
 
     			if (!current || dirty & /*$score*/ 2) {
     				set_style(div0, "transform", "translate(" + (/*$score*/ ctx[1].toString().length * -29 + 2) + "px,-85px)");
@@ -20377,17 +20272,20 @@ var app = (function () {
     		},
     		i: function intro(local) {
     			if (current) return;
+    			transition_in(telerobot.$$.fragment, local);
     			transition_in(cargoonfield.$$.fragment, local);
     			transition_in(robot.$$.fragment, local);
     			current = true;
     		},
     		o: function outro(local) {
+    			transition_out(telerobot.$$.fragment, local);
     			transition_out(cargoonfield.$$.fragment, local);
     			transition_out(robot.$$.fragment, local);
     			current = false;
     		},
     		d: function destroy(detaching) {
     			if (detaching) detach_dev(div5);
+    			destroy_component(telerobot);
     			if (if_block0) if_block0.d();
     			destroy_component(cargoonfield);
     			destroy_component(robot);
@@ -20452,6 +20350,7 @@ var app = (function () {
 
     	function resetAll() {
     		set_store_value(matchTime, $matchTime = 150, $matchTime);
+    		$$invalidate(0, matchPercent = 100);
     		set_store_value(reset, $reset = true, $reset);
     		set_store_value(fieldBallCount, $fieldBallCount = 0, $fieldBallCount);
     		set_store_value(ballsInRobot, $ballsInRobot = 0, $ballsInRobot);
@@ -20476,6 +20375,7 @@ var app = (function () {
     		ballsInRobot,
     		Robot,
     		CargoOnField,
+    		TeleRobot,
     		maxTime,
     		liveTime,
     		matchPercent,
@@ -21127,7 +21027,7 @@ var app = (function () {
     			create_component(timekeeper.$$.fragment);
     			attr_dev(div, "class", "fixed");
     			set_style(div, "transform", "translate(" + /*xOff*/ ctx[4] + "px," + /*yOff*/ ctx[3] + "px) scale(" + /*scale*/ ctx[2] + ")");
-    			add_location(div, file, 43, 0, 1409);
+    			add_location(div, file, 42, 0, 1407);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -21269,7 +21169,7 @@ var app = (function () {
     	}
     }
 
-    var css_248z = "/*\n! tailwindcss v3.1.4 | MIT License | https://tailwindcss.com\n*//*\n1. Prevent padding and border from affecting element width. (https://github.com/mozdevs/cssremedy/issues/4)\n2. Allow adding a border to an element by just adding a border-width. (https://github.com/tailwindcss/tailwindcss/pull/116)\n*/\n\n*,\n::before,\n::after {\n  box-sizing: border-box; /* 1 */\n  border-width: 0; /* 2 */\n  border-style: solid; /* 2 */\n  border-color: #e5e7eb; /* 2 */\n}\n\n::before,\n::after {\n  --tw-content: '';\n}\n\n/*\n1. Use a consistent sensible line-height in all browsers.\n2. Prevent adjustments of font size after orientation changes in iOS.\n3. Use a more readable tab size.\n4. Use the user's configured `sans` font-family by default.\n*/\n\nhtml {\n  line-height: 1.5; /* 1 */\n  -webkit-text-size-adjust: 100%; /* 2 */\n  -moz-tab-size: 4; /* 3 */\n  -o-tab-size: 4;\n     tab-size: 4; /* 3 */\n  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"; /* 4 */\n}\n\n/*\n1. Remove the margin in all browsers.\n2. Inherit line-height from `html` so users can set them as a class directly on the `html` element.\n*/\n\nbody {\n  margin: 0; /* 1 */\n  line-height: inherit; /* 2 */\n}\n\n/*\n1. Add the correct height in Firefox.\n2. Correct the inheritance of border color in Firefox. (https://bugzilla.mozilla.org/show_bug.cgi?id=190655)\n3. Ensure horizontal rules are visible by default.\n*/\n\nhr {\n  height: 0; /* 1 */\n  color: inherit; /* 2 */\n  border-top-width: 1px; /* 3 */\n}\n\n/*\nAdd the correct text decoration in Chrome, Edge, and Safari.\n*/\n\nabbr:where([title]) {\n  -webkit-text-decoration: underline dotted;\n          text-decoration: underline dotted;\n}\n\n/*\nRemove the default font size and weight for headings.\n*/\n\nh1,\nh2,\nh3,\nh4,\nh5,\nh6 {\n  font-size: inherit;\n  font-weight: inherit;\n}\n\n/*\nReset links to optimize for opt-in styling instead of opt-out.\n*/\n\na {\n  color: inherit;\n  text-decoration: inherit;\n}\n\n/*\nAdd the correct font weight in Edge and Safari.\n*/\n\nb,\nstrong {\n  font-weight: bolder;\n}\n\n/*\n1. Use the user's configured `mono` font family by default.\n2. Correct the odd `em` font sizing in all browsers.\n*/\n\ncode,\nkbd,\nsamp,\npre {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace; /* 1 */\n  font-size: 1em; /* 2 */\n}\n\n/*\nAdd the correct font size in all browsers.\n*/\n\nsmall {\n  font-size: 80%;\n}\n\n/*\nPrevent `sub` and `sup` elements from affecting the line height in all browsers.\n*/\n\nsub,\nsup {\n  font-size: 75%;\n  line-height: 0;\n  position: relative;\n  vertical-align: baseline;\n}\n\nsub {\n  bottom: -0.25em;\n}\n\nsup {\n  top: -0.5em;\n}\n\n/*\n1. Remove text indentation from table contents in Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=999088, https://bugs.webkit.org/show_bug.cgi?id=201297)\n2. Correct table border color inheritance in all Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=935729, https://bugs.webkit.org/show_bug.cgi?id=195016)\n3. Remove gaps between table borders by default.\n*/\n\ntable {\n  text-indent: 0; /* 1 */\n  border-color: inherit; /* 2 */\n  border-collapse: collapse; /* 3 */\n}\n\n/*\n1. Change the font styles in all browsers.\n2. Remove the margin in Firefox and Safari.\n3. Remove default padding in all browsers.\n*/\n\nbutton,\ninput,\noptgroup,\nselect,\ntextarea {\n  font-family: inherit; /* 1 */\n  font-size: 100%; /* 1 */\n  font-weight: inherit; /* 1 */\n  line-height: inherit; /* 1 */\n  color: inherit; /* 1 */\n  margin: 0; /* 2 */\n  padding: 0; /* 3 */\n}\n\n/*\nRemove the inheritance of text transform in Edge and Firefox.\n*/\n\nbutton,\nselect {\n  text-transform: none;\n}\n\n/*\n1. Correct the inability to style clickable types in iOS and Safari.\n2. Remove default button styles.\n*/\n\nbutton,\n[type='button'],\n[type='reset'],\n[type='submit'] {\n  -webkit-appearance: button; /* 1 */\n  background-color: transparent; /* 2 */\n  background-image: none; /* 2 */\n}\n\n/*\nUse the modern Firefox focus style for all focusable elements.\n*/\n\n:-moz-focusring {\n  outline: auto;\n}\n\n/*\nRemove the additional `:invalid` styles in Firefox. (https://github.com/mozilla/gecko-dev/blob/2f9eacd9d3d995c937b4251a5557d95d494c9be1/layout/style/res/forms.css#L728-L737)\n*/\n\n:-moz-ui-invalid {\n  box-shadow: none;\n}\n\n/*\nAdd the correct vertical alignment in Chrome and Firefox.\n*/\n\nprogress {\n  vertical-align: baseline;\n}\n\n/*\nCorrect the cursor style of increment and decrement buttons in Safari.\n*/\n\n::-webkit-inner-spin-button,\n::-webkit-outer-spin-button {\n  height: auto;\n}\n\n/*\n1. Correct the odd appearance in Chrome and Safari.\n2. Correct the outline style in Safari.\n*/\n\n[type='search'] {\n  -webkit-appearance: textfield; /* 1 */\n  outline-offset: -2px; /* 2 */\n}\n\n/*\nRemove the inner padding in Chrome and Safari on macOS.\n*/\n\n::-webkit-search-decoration {\n  -webkit-appearance: none;\n}\n\n/*\n1. Correct the inability to style clickable types in iOS and Safari.\n2. Change font properties to `inherit` in Safari.\n*/\n\n::-webkit-file-upload-button {\n  -webkit-appearance: button; /* 1 */\n  font: inherit; /* 2 */\n}\n\n/*\nAdd the correct display in Chrome and Safari.\n*/\n\nsummary {\n  display: list-item;\n}\n\n/*\nRemoves the default spacing and border for appropriate elements.\n*/\n\nblockquote,\ndl,\ndd,\nh1,\nh2,\nh3,\nh4,\nh5,\nh6,\nhr,\nfigure,\np,\npre {\n  margin: 0;\n}\n\nfieldset {\n  margin: 0;\n  padding: 0;\n}\n\nlegend {\n  padding: 0;\n}\n\nol,\nul,\nmenu {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n/*\nPrevent resizing textareas horizontally by default.\n*/\n\ntextarea {\n  resize: vertical;\n}\n\n/*\n1. Reset the default placeholder opacity in Firefox. (https://github.com/tailwindlabs/tailwindcss/issues/3300)\n2. Set the default placeholder color to the user's configured gray 400 color.\n*/\n\ninput::-moz-placeholder, textarea::-moz-placeholder {\n  opacity: 1; /* 1 */\n  color: #9ca3af; /* 2 */\n}\n\ninput::placeholder,\ntextarea::placeholder {\n  opacity: 1; /* 1 */\n  color: #9ca3af; /* 2 */\n}\n\n/*\nSet the default cursor for buttons.\n*/\n\nbutton,\n[role=\"button\"] {\n  cursor: pointer;\n}\n\n/*\nMake sure disabled buttons don't get the pointer cursor.\n*/\n:disabled {\n  cursor: default;\n}\n\n/*\n1. Make replaced elements `display: block` by default. (https://github.com/mozdevs/cssremedy/issues/14)\n2. Add `vertical-align: middle` to align replaced elements more sensibly by default. (https://github.com/jensimmons/cssremedy/issues/14#issuecomment-634934210)\n   This can trigger a poorly considered lint error in some tools but is included by design.\n*/\n\nimg,\nsvg,\nvideo,\ncanvas,\naudio,\niframe,\nembed,\nobject {\n  display: block; /* 1 */\n  vertical-align: middle; /* 2 */\n}\n\n/*\nConstrain images and videos to the parent width and preserve their intrinsic aspect ratio. (https://github.com/mozdevs/cssremedy/issues/14)\n*/\n\nimg,\nvideo {\n  max-width: 100%;\n  height: auto;\n}\n\n:root,\n[data-theme] {\n  background-color: hsla(var(--b1) / var(--tw-bg-opacity, 1));\n  color: hsla(var(--bc) / var(--tw-text-opacity, 1));\n}\n\nhtml {\n  -webkit-tap-highlight-color: transparent;\n}\n\n:root {\n  --p: 221 83% 53%;\n  --pf: 221 83% 43%;\n  --sf: 43 96% 45%;\n  --af: 0 0% 0%;\n  --nf: 0 10% 5%;\n  --b2: 0 0% 0%;\n  --b3: 0 0% 0%;\n  --bc: 0 0% 80%;\n  --pc: 221 100% 91%;\n  --sc: 43 100% 11%;\n  --ac: 0 0% 80%;\n  --nc: 0 7% 81%;\n  --inc: 198 100% 12%;\n  --suc: 158 100% 10%;\n  --wac: 43 100% 11%;\n  --erc: 0 100% 14%;\n  --rounded-box: 1rem;\n  --rounded-btn: 0.5rem;\n  --rounded-badge: 1.9rem;\n  --animation-btn: 0.25s;\n  --animation-input: .2s;\n  --btn-text-case: uppercase;\n  --btn-focus-scale: 0.95;\n  --border-btn: 1px;\n  --tab-border: 1px;\n  --tab-radius: 0.5rem;\n  --s: 43 96% 56%;\n  --a: 0 0% 0%;\n  --n: 0 10% 6%;\n  --b1: 0 0% 0%;\n  --in: 198 93% 60%;\n  --su: 158 64% 52%;\n  --wa: 43 96% 56%;\n  --er: 0 91% 71%;\n}\n\n*, ::before, ::after {\n  --tw-border-spacing-x: 0;\n  --tw-border-spacing-y: 0;\n  --tw-translate-x: 0;\n  --tw-translate-y: 0;\n  --tw-rotate: 0;\n  --tw-skew-x: 0;\n  --tw-skew-y: 0;\n  --tw-scale-x: 1;\n  --tw-scale-y: 1;\n  --tw-pan-x:  ;\n  --tw-pan-y:  ;\n  --tw-pinch-zoom:  ;\n  --tw-scroll-snap-strictness: proximity;\n  --tw-ordinal:  ;\n  --tw-slashed-zero:  ;\n  --tw-numeric-figure:  ;\n  --tw-numeric-spacing:  ;\n  --tw-numeric-fraction:  ;\n  --tw-ring-inset:  ;\n  --tw-ring-offset-width: 0px;\n  --tw-ring-offset-color: #fff;\n  --tw-ring-color: rgb(59 130 246 / 0.5);\n  --tw-ring-offset-shadow: 0 0 #0000;\n  --tw-ring-shadow: 0 0 #0000;\n  --tw-shadow: 0 0 #0000;\n  --tw-shadow-colored: 0 0 #0000;\n  --tw-blur:  ;\n  --tw-brightness:  ;\n  --tw-contrast:  ;\n  --tw-grayscale:  ;\n  --tw-hue-rotate:  ;\n  --tw-invert:  ;\n  --tw-saturate:  ;\n  --tw-sepia:  ;\n  --tw-drop-shadow:  ;\n  --tw-backdrop-blur:  ;\n  --tw-backdrop-brightness:  ;\n  --tw-backdrop-contrast:  ;\n  --tw-backdrop-grayscale:  ;\n  --tw-backdrop-hue-rotate:  ;\n  --tw-backdrop-invert:  ;\n  --tw-backdrop-opacity:  ;\n  --tw-backdrop-saturate:  ;\n  --tw-backdrop-sepia:  ;\n}\n\n::-webkit-backdrop {\n  --tw-border-spacing-x: 0;\n  --tw-border-spacing-y: 0;\n  --tw-translate-x: 0;\n  --tw-translate-y: 0;\n  --tw-rotate: 0;\n  --tw-skew-x: 0;\n  --tw-skew-y: 0;\n  --tw-scale-x: 1;\n  --tw-scale-y: 1;\n  --tw-pan-x:  ;\n  --tw-pan-y:  ;\n  --tw-pinch-zoom:  ;\n  --tw-scroll-snap-strictness: proximity;\n  --tw-ordinal:  ;\n  --tw-slashed-zero:  ;\n  --tw-numeric-figure:  ;\n  --tw-numeric-spacing:  ;\n  --tw-numeric-fraction:  ;\n  --tw-ring-inset:  ;\n  --tw-ring-offset-width: 0px;\n  --tw-ring-offset-color: #fff;\n  --tw-ring-color: rgb(59 130 246 / 0.5);\n  --tw-ring-offset-shadow: 0 0 #0000;\n  --tw-ring-shadow: 0 0 #0000;\n  --tw-shadow: 0 0 #0000;\n  --tw-shadow-colored: 0 0 #0000;\n  --tw-blur:  ;\n  --tw-brightness:  ;\n  --tw-contrast:  ;\n  --tw-grayscale:  ;\n  --tw-hue-rotate:  ;\n  --tw-invert:  ;\n  --tw-saturate:  ;\n  --tw-sepia:  ;\n  --tw-drop-shadow:  ;\n  --tw-backdrop-blur:  ;\n  --tw-backdrop-brightness:  ;\n  --tw-backdrop-contrast:  ;\n  --tw-backdrop-grayscale:  ;\n  --tw-backdrop-hue-rotate:  ;\n  --tw-backdrop-invert:  ;\n  --tw-backdrop-opacity:  ;\n  --tw-backdrop-saturate:  ;\n  --tw-backdrop-sepia:  ;\n}\n\n::backdrop {\n  --tw-border-spacing-x: 0;\n  --tw-border-spacing-y: 0;\n  --tw-translate-x: 0;\n  --tw-translate-y: 0;\n  --tw-rotate: 0;\n  --tw-skew-x: 0;\n  --tw-skew-y: 0;\n  --tw-scale-x: 1;\n  --tw-scale-y: 1;\n  --tw-pan-x:  ;\n  --tw-pan-y:  ;\n  --tw-pinch-zoom:  ;\n  --tw-scroll-snap-strictness: proximity;\n  --tw-ordinal:  ;\n  --tw-slashed-zero:  ;\n  --tw-numeric-figure:  ;\n  --tw-numeric-spacing:  ;\n  --tw-numeric-fraction:  ;\n  --tw-ring-inset:  ;\n  --tw-ring-offset-width: 0px;\n  --tw-ring-offset-color: #fff;\n  --tw-ring-color: rgb(59 130 246 / 0.5);\n  --tw-ring-offset-shadow: 0 0 #0000;\n  --tw-ring-shadow: 0 0 #0000;\n  --tw-shadow: 0 0 #0000;\n  --tw-shadow-colored: 0 0 #0000;\n  --tw-blur:  ;\n  --tw-brightness:  ;\n  --tw-contrast:  ;\n  --tw-grayscale:  ;\n  --tw-hue-rotate:  ;\n  --tw-invert:  ;\n  --tw-saturate:  ;\n  --tw-sepia:  ;\n  --tw-drop-shadow:  ;\n  --tw-backdrop-blur:  ;\n  --tw-backdrop-brightness:  ;\n  --tw-backdrop-contrast:  ;\n  --tw-backdrop-grayscale:  ;\n  --tw-backdrop-hue-rotate:  ;\n  --tw-backdrop-invert:  ;\n  --tw-backdrop-opacity:  ;\n  --tw-backdrop-saturate:  ;\n  --tw-backdrop-sepia:  ;\n}\r\n.btn {\n  display: inline-flex;\n  flex-shrink: 0;\n  cursor: pointer;\n  -webkit-user-select: none;\n  -moz-user-select: none;\n       user-select: none;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: center;\n  border-color: transparent;\n  border-color: hsl(var(--n) / var(--tw-border-opacity));\n  text-align: center;\n  transition-property: color, background-color, border-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-text-decoration-color, -webkit-backdrop-filter;\n  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;\n  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-text-decoration-color, -webkit-backdrop-filter;\n  transition-duration: 200ms;\n  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);\n  border-radius: var(--rounded-btn, 0.5rem);\n  height: 3rem;\n  padding-left: 1rem;\n  padding-right: 1rem;\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  line-height: 1em;\n  min-height: 3rem;\n  font-weight: 600;\n  text-transform: uppercase;\n  text-transform: var(--btn-text-case, uppercase);\n  -webkit-text-decoration-line: none;\n  text-decoration-line: none;\n  border-width: var(--border-btn, 1px);\n  -webkit-animation: button-pop var(--animation-btn, 0.25s) ease-out;\n          animation: button-pop var(--animation-btn, 0.25s) ease-out;\n  --tw-border-opacity: 1;\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--n) / var(--tw-bg-opacity));\n  --tw-text-opacity: 1;\n  color: hsl(var(--nc) / var(--tw-text-opacity));\n}\r\n.btn-disabled, \n  .btn[disabled] {\n  pointer-events: none;\n}\r\n.btn-circle {\n  height: 3rem;\n  width: 3rem;\n  border-radius: 9999px;\n  padding: 0px;\n}\r\n.btn.loading, \n    .btn.loading:hover {\n  pointer-events: none;\n}\r\n.btn.loading:before {\n  margin-right: 0.5rem;\n  height: 1rem;\n  width: 1rem;\n  border-radius: 9999px;\n  border-width: 2px;\n  -webkit-animation: spin 2s linear infinite;\n          animation: spin 2s linear infinite;\n  content: \"\";\n  border-top-color: transparent;\n  border-left-color: transparent;\n  border-bottom-color: currentColor;\n  border-right-color: currentColor;\n}\r\n@media (prefers-reduced-motion: reduce) {\n\n  .btn.loading:before {\n    -webkit-animation: spin 10s linear infinite;\n            animation: spin 10s linear infinite;\n  }\n}\r\n@-webkit-keyframes spin {\n\n  from {\n    transform: rotate(0deg);\n  }\n\n  to {\n    transform: rotate(360deg);\n  }\n}\r\n@keyframes spin {\n\n  from {\n    transform: rotate(0deg);\n  }\n\n  to {\n    transform: rotate(360deg);\n  }\n}\r\n.btn-group > input[type=\"radio\"].btn {\n  -webkit-appearance: none;\n     -moz-appearance: none;\n          appearance: none;\n}\r\n.btn-group > input[type=\"radio\"].btn:before {\n  content: attr(data-title);\n}\r\n.checkbox {\n  flex-shrink: 0;\n  --chkbg: var(--bc);\n  --chkfg: var(--b1);\n  height: 1.5rem;\n  width: 1.5rem;\n  cursor: pointer;\n  -webkit-appearance: none;\n     -moz-appearance: none;\n          appearance: none;\n  border-width: 1px;\n  border-color: hsl(var(--bc) / var(--tw-border-opacity));\n  --tw-border-opacity: 0.2;\n  border-radius: var(--rounded-btn, 0.5rem);\n}\r\n.label {\n  display: flex;\n  -webkit-user-select: none;\n  -moz-user-select: none;\n       user-select: none;\n  align-items: center;\n  justify-content: space-between;\n  padding-left: 0.25rem;\n  padding-right: 0.25rem;\n  padding-top: 0.5rem;\n  padding-bottom: 0.5rem;\n}\r\n.input {\n  flex-shrink: 1;\n  transition-property: color, background-color, border-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-text-decoration-color, -webkit-backdrop-filter;\n  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;\n  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-text-decoration-color, -webkit-backdrop-filter;\n  transition-duration: 200ms;\n  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);\n  height: 3rem;\n  padding-left: 1rem;\n  padding-right: 1rem;\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  line-height: 2;\n  border-width: 1px;\n  border-color: hsl(var(--bc) / var(--tw-border-opacity));\n  --tw-border-opacity: 0;\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--b1) / var(--tw-bg-opacity));\n  border-radius: var(--rounded-btn, 0.5rem);\n}\r\n.input-group > *, \n  .input-group > .input {\n  border-radius: 0px;\n}\r\n.modal {\n  pointer-events: none;\n  visibility: hidden;\n  position: fixed;\n  top: 0px;\n  right: 0px;\n  bottom: 0px;\n  left: 0px;\n  display: flex;\n  justify-content: center;\n  opacity: 0;\n  z-index: 999;\n  background-color: hsl(var(--nf, var(--n)) / var(--tw-bg-opacity));\n  --tw-bg-opacity: 0.4;\n  transition-duration: 200ms;\n  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);\n  transition-property: transform, opacity;\n  overflow-y: hidden;\n  overscroll-behavior: contain;\n}\r\n:where(.modal) {\n  align-items: center;\n}\r\n.modal-box {\n  max-height: calc(100vh - 5em);\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--b1) / var(--tw-bg-opacity));\n  padding: 1.5rem;\n  transition-property: color, background-color, border-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-text-decoration-color, -webkit-backdrop-filter;\n  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;\n  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-text-decoration-color, -webkit-backdrop-filter;\n  transition-duration: 200ms;\n  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);\n  width: 91.666667%;\n  max-width: 32rem;\n  --tw-scale-x: .9;\n  --tw-scale-y: .9;\n  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));\n  border-top-left-radius: var(--rounded-box, 1rem);\n  border-top-right-radius: var(--rounded-box, 1rem);\n  border-bottom-left-radius: var(--rounded-box, 1rem);\n  border-bottom-right-radius: var(--rounded-box, 1rem);\n  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);\n  overflow-y: auto;\n  overscroll-behavior: contain;\n}\r\n.modal-open, \n.modal:target, \n.modal-toggle:checked + .modal {\n  pointer-events: auto;\n  visibility: visible;\n  opacity: 1;\n}\r\n.modal-action {\n  display: flex;\n  margin-top: 1.5rem;\n  justify-content: flex-end;\n}\r\n.modal-toggle {\n  position: fixed;\n  height: 0px;\n  width: 0px;\n  -webkit-appearance: none;\n     -moz-appearance: none;\n          appearance: none;\n  opacity: 0;\n}\r\n.radial-progress {\n  position: relative;\n  display: inline-grid;\n  height: var(--size);\n  width: var(--size);\n  place-content: center;\n  border-radius: 9999px;\n  background-color: transparent;\n  vertical-align: middle;\n  box-sizing: content-box;\n  --value: 0;\n  --size: 5rem;\n  --thickness: calc(var(--size) / 10);\n}\r\n.radial-progress::-moz-progress-bar {\n  -moz-appearance: none;\n       appearance: none;\n  background-color: transparent;\n}\r\n.radial-progress::-webkit-progress-value {\n  -webkit-appearance: none;\n          appearance: none;\n  background-color: transparent;\n}\r\n.radial-progress::-webkit-progress-bar {\n  -webkit-appearance: none;\n          appearance: none;\n  background-color: transparent;\n}\r\n.radial-progress:before, \n.radial-progress:after {\n  position: absolute;\n  border-radius: 9999px;\n  content: \"\";\n}\r\n.radial-progress:before {\n  top: 0px;\n  right: 0px;\n  bottom: 0px;\n  left: 0px;\n  background: radial-gradient(farthest-side, currentColor 98%, #0000) top/var(--thickness) var(--thickness) no-repeat, conic-gradient(currentColor calc(var(--value) * 1%), #0000 0);\n  -webkit-mask: radial-gradient(farthest-side, #0000 calc(99% - var(--thickness)), #000 calc(100% - var(--thickness)));\n  mask: radial-gradient(farthest-side, #0000 calc(99% - var(--thickness)), #000 calc(100% - var(--thickness)));\n}\r\n.radial-progress:after {\n  inset: calc(50% - var(--thickness) / 2);\n  transform: rotate(calc(var(--value) * 3.6deg - 90deg)) translate(calc(var(--size) / 2 - 50%));\n  background-color: currentColor;\n}\r\n.range {\n  height: 1.5rem;\n  width: 100%;\n  cursor: pointer;\n  -webkit-appearance: none;\n  --range-shdw: var(--bc);\n  overflow: hidden;\n  background-color: transparent;\n  border-radius: var(--rounded-box, 1rem);\n}\r\n.range:focus {\n  outline: none;\n}\r\n.btn-outline.btn-accent .badge {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--a) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--a) / var(--tw-bg-opacity));\n  --tw-text-opacity: 1;\n  color: hsl(var(--ac) / var(--tw-text-opacity));\n}\r\n.btn-outline.btn-accent .badge-outline {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--a) / var(--tw-border-opacity));\n  background-color: transparent;\n  --tw-text-opacity: 1;\n  color: hsl(var(--a) / var(--tw-text-opacity));\n}\r\n.btn-outline.btn-accent:hover .badge {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--ac) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--ac) / var(--tw-bg-opacity));\n  --tw-text-opacity: 1;\n  color: hsl(var(--a) / var(--tw-text-opacity));\n}\r\n.btn-outline.btn-accent:hover .badge.outline {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--ac) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--af, var(--a)) / var(--tw-bg-opacity));\n  --tw-text-opacity: 1;\n  color: hsl(var(--ac) / var(--tw-text-opacity));\n}\r\n.btm-nav>* .label {\n  font-size: 1rem;\n  line-height: 1.5rem;\n}\r\n.btn:active:hover,\n  .btn:active:focus {\n  -webkit-animation: none;\n          animation: none;\n  transform: scale(var(--btn-focus-scale, 0.95));\n}\r\n.btn:hover, \n    .btn-active {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--nf, var(--n)) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--nf, var(--n)) / var(--tw-bg-opacity));\n}\r\n.btn:focus-visible {\n  outline: 2px solid hsl(var(--nf));\n  outline-offset: 2px;\n}\r\n.btn-accent {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--a) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--a) / var(--tw-bg-opacity));\n  --tw-text-opacity: 1;\n  color: hsl(var(--ac) / var(--tw-text-opacity));\n}\r\n.btn-accent:hover, \n    .btn-accent.btn-active {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--af, var(--a)) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--af, var(--a)) / var(--tw-bg-opacity));\n}\r\n.btn-accent:focus-visible {\n  outline: 2px solid hsl(var(--a));\n}\r\n.btn.glass:hover,\n    .btn.glass.btn-active {\n  --glass-opacity: 25%;\n  --glass-border-opacity: 15%;\n}\r\n.btn.glass:focus-visible {\n  outline: 2px solid 0 0 2px currentColor;\n}\r\n.btn-outline.btn-accent {\n  --tw-text-opacity: 1;\n  color: hsl(var(--a) / var(--tw-text-opacity));\n}\r\n.btn-outline.btn-accent:hover {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--af, var(--a)) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--af, var(--a)) / var(--tw-bg-opacity));\n  --tw-text-opacity: 1;\n  color: hsl(var(--ac) / var(--tw-text-opacity));\n}\r\n.btn-disabled, \n  .btn-disabled:hover, \n  .btn[disabled], \n  .btn[disabled]:hover {\n  --tw-border-opacity: 0;\n  background-color: hsl(var(--n) / var(--tw-bg-opacity));\n  --tw-bg-opacity: 0.2;\n  color: hsl(var(--bc) / var(--tw-text-opacity));\n  --tw-text-opacity: 0.2;\n}\r\n.btn.loading.btn-square:before, \n    .btn.loading.btn-circle:before {\n  margin-right: 0px;\n}\r\n.btn.loading.btn-xl:before, \n    .btn.loading.btn-lg:before {\n  height: 1.25rem;\n  width: 1.25rem;\n}\r\n.btn.loading.btn-sm:before, \n    .btn.loading.btn-xs:before {\n  height: 0.75rem;\n  width: 0.75rem;\n}\r\n.btn-group > input[type=\"radio\"]:checked.btn, \n  .btn-group > .btn-active {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--p) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--p) / var(--tw-bg-opacity));\n  --tw-text-opacity: 1;\n  color: hsl(var(--pc) / var(--tw-text-opacity));\n}\r\n.btn-group > input[type=\"radio\"]:checked.btn:focus-visible, .btn-group > .btn-active:focus-visible {\n  outline: 2px solid hsl(var(--p));\n}\r\n.btn-group:not(.btn-group-vertical) > .btn:not(:first-of-type) {\n  margin-left: -1px;\n  border-top-left-radius: 0px;\n  border-bottom-left-radius: 0px;\n}\r\n.btn-group:not(.btn-group-vertical) > .btn:not(:last-of-type) {\n  border-top-right-radius: 0px;\n  border-bottom-right-radius: 0px;\n}\r\n.btn-group-vertical > .btn:not(:first-of-type) {\n  margin-top: -1px;\n  border-top-left-radius: 0px;\n  border-top-right-radius: 0px;\n}\r\n.btn-group-vertical > .btn:not(:last-of-type) {\n  border-bottom-right-radius: 0px;\n  border-bottom-left-radius: 0px;\n}\r\n@-webkit-keyframes button-pop {\n\n  0% {\n    transform: scale(var(--btn-focus-scale, 0.95));\n  }\n\n  40% {\n    transform: scale(1.02);\n  }\n\n  100% {\n    transform: scale(1);\n  }\n}\r\n@keyframes button-pop {\n\n  0% {\n    transform: scale(var(--btn-focus-scale, 0.95));\n  }\n\n  40% {\n    transform: scale(1.02);\n  }\n\n  100% {\n    transform: scale(1);\n  }\n}\r\n.checkbox:focus-visible {\n  outline: 2px solid hsl(var(--bc));\n  outline-offset: 2px;\n}\r\n.checkbox:checked, \n  .checkbox[checked=\"true\"] {\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--bc) / var(--tw-bg-opacity));\n  background-repeat: no-repeat;\n  -webkit-animation: checkmark var(--animation-input, 0.2s) ease-in-out;\n          animation: checkmark var(--animation-input, 0.2s) ease-in-out;\n  background-image: linear-gradient(-45deg, transparent 65%, hsl(var(--chkbg)) 65.99%), linear-gradient(45deg, transparent 75%, hsl(var(--chkbg)) 75.99%), linear-gradient(-45deg, hsl(var(--chkbg)) 40%, transparent 40.99%), linear-gradient(45deg, hsl(var(--chkbg)) 30%, hsl(var(--chkfg)) 30.99%, hsl(var(--chkfg)) 40%, transparent 40.99%), linear-gradient(-45deg, hsl(var(--chkfg)) 50%, hsl(var(--chkbg)) 50.99%);\n}\r\n.checkbox:indeterminate {\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--bc) / var(--tw-bg-opacity));\n  background-repeat: no-repeat;\n  -webkit-animation: checkmark var(--animation-input, 0.2s) ease-in-out;\n          animation: checkmark var(--animation-input, 0.2s) ease-in-out;\n  background-image: linear-gradient(90deg, transparent 80%, hsl(var(--chkbg)) 80%), linear-gradient(-90deg, transparent 80%, hsl(var(--chkbg)) 80%), linear-gradient(0deg, hsl(var(--chkbg)) 43%, hsl(var(--chkfg)) 43%, hsl(var(--chkfg)) 57%, hsl(var(--chkbg)) 57%);\n}\r\n.checkbox:disabled {\n  cursor: not-allowed;\n  border-color: transparent;\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--bc) / var(--tw-bg-opacity));\n  opacity: 0.2;\n}\r\n@-webkit-keyframes checkmark {\n\n  0% {\n    background-position-y: 5px;\n  }\n\n  50% {\n    background-position-y: -2px;\n  }\n\n  100% {\n    background-position-y: 0;\n  }\n}\r\n@keyframes checkmark {\n\n  0% {\n    background-position-y: 5px;\n  }\n\n  50% {\n    background-position-y: -2px;\n  }\n\n  100% {\n    background-position-y: 0;\n  }\n}\r\nbody[dir=\"rtl\"] .checkbox {\n  --chkbg: var(--bc);\n  --chkfg: var(--b1);\n}\r\nbody[dir=\"rtl\"] .checkbox:checked,\n    body[dir=\"rtl\"] .checkbox[checked=\"true\"] {\n  background-image: linear-gradient(45deg, transparent 65%, hsl(var(--chkbg)) 65.99%), linear-gradient(-45deg, transparent 75%, hsl(var(--chkbg)) 75.99%), linear-gradient(45deg, hsl(var(--chkbg)) 40%, transparent 40.99%), linear-gradient(-45deg, hsl(var(--chkbg)) 30%, hsl(var(--chkfg)) 30.99%, hsl(var(--chkfg)) 40%, transparent 40.99%), linear-gradient(45deg, hsl(var(--chkfg)) 50%, hsl(var(--chkbg)) 50.99%);\n}\r\n.drawer-toggle:focus-visible ~ .drawer-content .drawer-button.btn-accent {\n  outline: 2px solid hsl(var(--a));\n}\r\n.label a:hover {\n  --tw-text-opacity: 1;\n  color: hsl(var(--bc) / var(--tw-text-opacity));\n}\r\n.input[list]::-webkit-calendar-picker-indicator {\n  line-height: 1em;\n}\r\n.input:focus {\n  outline: 2px solid hsla(var(--bc) / 0.2);\n  outline-offset: 2px;\n}\r\n.input-disabled, \n  .input[disabled] {\n  cursor: not-allowed;\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--b2, var(--b1)) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--b2, var(--b1)) / var(--tw-bg-opacity));\n  --tw-text-opacity: 0.2;\n}\r\n.input-disabled::-moz-placeholder, .input[disabled]::-moz-placeholder {\n  color: hsl(var(--bc) / var(--tw-placeholder-opacity));\n  --tw-placeholder-opacity: 0.2;\n}\r\n.input-disabled::placeholder, \n  .input[disabled]::placeholder {\n  color: hsl(var(--bc) / var(--tw-placeholder-opacity));\n  --tw-placeholder-opacity: 0.2;\n}\r\n.modal-open .modal-box, \n.modal-toggle:checked + .modal .modal-box, \n.modal:target .modal-box {\n  --tw-translate-y: 0px;\n  --tw-scale-x: 1;\n  --tw-scale-y: 1;\n  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));\n}\r\n.modal-action > :not([hidden]) ~ :not([hidden]) {\n  --tw-space-x-reverse: 0;\n  margin-right: calc(0.5rem * var(--tw-space-x-reverse));\n  margin-left: calc(0.5rem * calc(1 - var(--tw-space-x-reverse)));\n}\r\n@-webkit-keyframes progress-loading {\n\n  50% {\n    left: 107%;\n  }\n}\r\n@keyframes progress-loading {\n\n  50% {\n    left: 107%;\n  }\n}\r\n@-webkit-keyframes radiomark {\n\n  0% {\n    box-shadow: 0 0 0 12px hsl(var(--b1)) inset, 0 0 0 12px hsl(var(--b1)) inset;\n  }\n\n  50% {\n    box-shadow: 0 0 0 3px hsl(var(--b1)) inset, 0 0 0 3px hsl(var(--b1)) inset;\n  }\n\n  100% {\n    box-shadow: 0 0 0 4px hsl(var(--b1)) inset, 0 0 0 4px hsl(var(--b1)) inset;\n  }\n}\r\n@keyframes radiomark {\n\n  0% {\n    box-shadow: 0 0 0 12px hsl(var(--b1)) inset, 0 0 0 12px hsl(var(--b1)) inset;\n  }\n\n  50% {\n    box-shadow: 0 0 0 3px hsl(var(--b1)) inset, 0 0 0 3px hsl(var(--b1)) inset;\n  }\n\n  100% {\n    box-shadow: 0 0 0 4px hsl(var(--b1)) inset, 0 0 0 4px hsl(var(--b1)) inset;\n  }\n}\r\n.range:focus-visible::-webkit-slider-thumb {\n  --focus-shadow: 0 0 0 6px hsl(var(--b1)) inset, 0 0 0 2rem hsl(var(--range-shdw)) inset;\n}\r\n.range:focus-visible::-moz-range-thumb {\n  --focus-shadow: 0 0 0 6px hsl(var(--b1)) inset, 0 0 0 2rem hsl(var(--range-shdw)) inset;\n}\r\n.range::-webkit-slider-runnable-track {\n  height: 0.5rem;\n  width: 100%;\n  border-radius: var(--rounded-box, 1rem);\n  background-color: hsla(var(--bc) / 0.1);\n}\r\n.range::-moz-range-track {\n  height: 0.5rem;\n  width: 100%;\n  border-radius: var(--rounded-box, 1rem);\n  background-color: hsla(var(--bc) / 0.1);\n}\r\n.range::-webkit-slider-thumb {\n  background-color: hsl(var(--b1));\n  position: relative;\n  height: 1.5rem;\n  width: 1.5rem;\n  border-style: none;\n  border-radius: var(--rounded-box, 1rem);\n  -webkit-appearance: none;\n  top: 50%;\n  color: hsl(var(--range-shdw));\n  transform: translateY(-50%);\n  --filler-size: 100rem;\n  --filler-offset: 0.6rem;\n  box-shadow: 0 0 0 3px hsl(var(--range-shdw)) inset, var(--focus-shadow, 0 0), calc(var(--filler-size) * -1 - var(--filler-offset)) 0 0 var(--filler-size);\n}\r\n.range::-moz-range-thumb {\n  background-color: hsl(var(--b1));\n  position: relative;\n  height: 1.5rem;\n  width: 1.5rem;\n  border-style: none;\n  border-radius: var(--rounded-box, 1rem);\n  top: 50%;\n  color: hsl(var(--range-shdw));\n  --filler-size: 100rem;\n  --filler-offset: 0.5rem;\n  box-shadow: 0 0 0 3px hsl(var(--range-shdw)) inset, var(--focus-shadow, 0 0), calc(var(--filler-size) * -1 - var(--filler-offset)) 0 0 var(--filler-size);\n}\r\n@-webkit-keyframes rating-pop {\n\n  0% {\n    transform: translateY(-0.125em);\n  }\n\n  40% {\n    transform: translateY(-0.125em);\n  }\n\n  100% {\n    transform: translateY(0);\n  }\n}\r\n@keyframes rating-pop {\n\n  0% {\n    transform: translateY(-0.125em);\n  }\n\n  40% {\n    transform: translateY(-0.125em);\n  }\n\n  100% {\n    transform: translateY(0);\n  }\n}\r\n.btn-sm {\n  height: 2rem;\n  padding-left: 0.75rem;\n  padding-right: 0.75rem;\n  min-height: 2rem;\n  font-size: 0.875rem;\n}\r\n.btn-lg {\n  height: 4rem;\n  padding-left: 1.5rem;\n  padding-right: 1.5rem;\n  min-height: 4rem;\n  font-size: 1.125rem;\n}\r\n.btn-square:where(.btn-sm) {\n  height: 2rem;\n  width: 2rem;\n  padding: 0px;\n}\r\n.btn-square:where(.btn-lg) {\n  height: 4rem;\n  width: 4rem;\n  padding: 0px;\n}\r\n.btn-circle:where(.btn-xs) {\n  height: 1.5rem;\n  width: 1.5rem;\n  border-radius: 9999px;\n  padding: 0px;\n}\r\n.btn-circle:where(.btn-sm) {\n  height: 2rem;\n  width: 2rem;\n  border-radius: 9999px;\n  padding: 0px;\n}\r\n.btn-circle:where(.btn-md) {\n  height: 3rem;\n  width: 3rem;\n  border-radius: 9999px;\n  padding: 0px;\n}\r\n.btn-circle:where(.btn-lg) {\n  height: 4rem;\n  width: 4rem;\n  border-radius: 9999px;\n  padding: 0px;\n}\r\n.modal-bottom {\n  align-items: flex-end;\n}\r\n.modal-bottom :where(.modal-box) {\n  width: 100%;\n  max-width: none;\n  --tw-translate-y: 2.5rem;\n  --tw-scale-x: 1;\n  --tw-scale-y: 1;\n  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));\n  border-bottom-right-radius: 0px;\n  border-bottom-left-radius: 0px;\n}\r\n.modal-middle :where(.modal-box) {\n  width: 91.666667%;\n  max-width: 32rem;\n  --tw-translate-y: 0px;\n  --tw-scale-x: .9;\n  --tw-scale-y: .9;\n  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));\n  border-bottom-left-radius: var(--rounded-box, 1rem);\n  border-bottom-right-radius: var(--rounded-box, 1rem);\n}\r\n.fixed {\n  position: fixed;\n}\r\n.absolute {\n  position: absolute;\n}\r\n.relative {\n  position: relative;\n}\r\n.right-2 {\n  right: 0.5rem;\n}\r\n.top-2 {\n  top: 0.5rem;\n}\r\n.z-20 {\n  z-index: 20;\n}\r\n.z-30 {\n  z-index: 30;\n}\r\n.z-10 {\n  z-index: 10;\n}\r\n.z-50 {\n  z-index: 50;\n}\r\n.z-40 {\n  z-index: 40;\n}\r\n.-ml-\\[127px\\] {\n  margin-left: -127px;\n}\r\n.-mt-\\[127px\\] {\n  margin-top: -127px;\n}\r\n.ml-\\[450px\\] {\n  margin-left: 450px;\n}\r\n.ml-\\[100px\\] {\n  margin-left: 100px;\n}\r\n.mt-\\[100px\\] {\n  margin-top: 100px;\n}\r\n.-mt-\\[158px\\] {\n  margin-top: -158px;\n}\r\n.-ml-\\[80px\\] {\n  margin-left: -80px;\n}\r\n.flex {\n  display: flex;\n}\r\n.grid {\n  display: grid;\n}\r\n.h-screen {\n  height: 100vh;\n}\r\n.h-\\[90px\\] {\n  height: 90px;\n}\r\n.h-\\[500px\\] {\n  height: 500px;\n}\r\n.h-10 {\n  height: 2.5rem;\n}\r\n.h-\\[900px\\] {\n  height: 900px;\n}\r\n.w-\\[160px\\] {\n  width: 160px;\n}\r\n.grow {\n  flex-grow: 1;\n}\r\n.transform {\n  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));\n}\r\n.place-items-center {\n  place-items: center;\n}\r\n.overflow-hidden {\n  overflow: hidden;\n}\r\n.overflow-visible {\n  overflow: visible;\n}\r\n.rounded-full {\n  border-radius: 9999px;\n}\r\n.border-4 {\n  border-width: 4px;\n}\r\n.border-dotted {\n  border-style: dotted;\n}\r\n.border-green-500 {\n  --tw-border-opacity: 1;\n  border-color: rgb(34 197 94 / var(--tw-border-opacity));\n}\r\n.py-4 {\n  padding-top: 1rem;\n  padding-bottom: 1rem;\n}\r\n.text-center {\n  text-align: center;\n}\r\n.text-8xl {\n  font-size: 6rem;\n  line-height: 1;\n}\r\n.text-lg {\n  font-size: 1.125rem;\n  line-height: 1.75rem;\n}\r\n.font-bold {\n  font-weight: 700;\n}\r\n.text-white {\n  --tw-text-opacity: 1;\n  color: rgb(255 255 255 / var(--tw-text-opacity));\n}\r\n.text-green-600 {\n  --tw-text-opacity: 1;\n  color: rgb(22 163 74 / var(--tw-text-opacity));\n}\r\n/*My hatred for CSS is present in the emptiness of this file*/\r\n@media (min-width: 640px) {\n\n  .sm\\:modal-middle {\n    align-items: center;\n  }\n\n  .sm\\:modal-middle :where(.modal-box) {\n    width: 91.666667%;\n    max-width: 32rem;\n    --tw-translate-y: 0px;\n    --tw-scale-x: .9;\n    --tw-scale-y: .9;\n    transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));\n    border-bottom-left-radius: var(--rounded-box, 1rem);\n    border-bottom-right-radius: var(--rounded-box, 1rem);\n  }\n}\r\n\r\n";
+    var css_248z = "/*\n! tailwindcss v3.1.4 | MIT License | https://tailwindcss.com\n*//*\n1. Prevent padding and border from affecting element width. (https://github.com/mozdevs/cssremedy/issues/4)\n2. Allow adding a border to an element by just adding a border-width. (https://github.com/tailwindcss/tailwindcss/pull/116)\n*/\n\n*,\n::before,\n::after {\n  box-sizing: border-box; /* 1 */\n  border-width: 0; /* 2 */\n  border-style: solid; /* 2 */\n  border-color: #e5e7eb; /* 2 */\n}\n\n::before,\n::after {\n  --tw-content: '';\n}\n\n/*\n1. Use a consistent sensible line-height in all browsers.\n2. Prevent adjustments of font size after orientation changes in iOS.\n3. Use a more readable tab size.\n4. Use the user's configured `sans` font-family by default.\n*/\n\nhtml {\n  line-height: 1.5; /* 1 */\n  -webkit-text-size-adjust: 100%; /* 2 */\n  -moz-tab-size: 4; /* 3 */\n  -o-tab-size: 4;\n     tab-size: 4; /* 3 */\n  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, \"Noto Sans\", sans-serif, \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Segoe UI Symbol\", \"Noto Color Emoji\"; /* 4 */\n}\n\n/*\n1. Remove the margin in all browsers.\n2. Inherit line-height from `html` so users can set them as a class directly on the `html` element.\n*/\n\nbody {\n  margin: 0; /* 1 */\n  line-height: inherit; /* 2 */\n}\n\n/*\n1. Add the correct height in Firefox.\n2. Correct the inheritance of border color in Firefox. (https://bugzilla.mozilla.org/show_bug.cgi?id=190655)\n3. Ensure horizontal rules are visible by default.\n*/\n\nhr {\n  height: 0; /* 1 */\n  color: inherit; /* 2 */\n  border-top-width: 1px; /* 3 */\n}\n\n/*\nAdd the correct text decoration in Chrome, Edge, and Safari.\n*/\n\nabbr:where([title]) {\n  -webkit-text-decoration: underline dotted;\n          text-decoration: underline dotted;\n}\n\n/*\nRemove the default font size and weight for headings.\n*/\n\nh1,\nh2,\nh3,\nh4,\nh5,\nh6 {\n  font-size: inherit;\n  font-weight: inherit;\n}\n\n/*\nReset links to optimize for opt-in styling instead of opt-out.\n*/\n\na {\n  color: inherit;\n  text-decoration: inherit;\n}\n\n/*\nAdd the correct font weight in Edge and Safari.\n*/\n\nb,\nstrong {\n  font-weight: bolder;\n}\n\n/*\n1. Use the user's configured `mono` font family by default.\n2. Correct the odd `em` font sizing in all browsers.\n*/\n\ncode,\nkbd,\nsamp,\npre {\n  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace; /* 1 */\n  font-size: 1em; /* 2 */\n}\n\n/*\nAdd the correct font size in all browsers.\n*/\n\nsmall {\n  font-size: 80%;\n}\n\n/*\nPrevent `sub` and `sup` elements from affecting the line height in all browsers.\n*/\n\nsub,\nsup {\n  font-size: 75%;\n  line-height: 0;\n  position: relative;\n  vertical-align: baseline;\n}\n\nsub {\n  bottom: -0.25em;\n}\n\nsup {\n  top: -0.5em;\n}\n\n/*\n1. Remove text indentation from table contents in Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=999088, https://bugs.webkit.org/show_bug.cgi?id=201297)\n2. Correct table border color inheritance in all Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=935729, https://bugs.webkit.org/show_bug.cgi?id=195016)\n3. Remove gaps between table borders by default.\n*/\n\ntable {\n  text-indent: 0; /* 1 */\n  border-color: inherit; /* 2 */\n  border-collapse: collapse; /* 3 */\n}\n\n/*\n1. Change the font styles in all browsers.\n2. Remove the margin in Firefox and Safari.\n3. Remove default padding in all browsers.\n*/\n\nbutton,\ninput,\noptgroup,\nselect,\ntextarea {\n  font-family: inherit; /* 1 */\n  font-size: 100%; /* 1 */\n  font-weight: inherit; /* 1 */\n  line-height: inherit; /* 1 */\n  color: inherit; /* 1 */\n  margin: 0; /* 2 */\n  padding: 0; /* 3 */\n}\n\n/*\nRemove the inheritance of text transform in Edge and Firefox.\n*/\n\nbutton,\nselect {\n  text-transform: none;\n}\n\n/*\n1. Correct the inability to style clickable types in iOS and Safari.\n2. Remove default button styles.\n*/\n\nbutton,\n[type='button'],\n[type='reset'],\n[type='submit'] {\n  -webkit-appearance: button; /* 1 */\n  background-color: transparent; /* 2 */\n  background-image: none; /* 2 */\n}\n\n/*\nUse the modern Firefox focus style for all focusable elements.\n*/\n\n:-moz-focusring {\n  outline: auto;\n}\n\n/*\nRemove the additional `:invalid` styles in Firefox. (https://github.com/mozilla/gecko-dev/blob/2f9eacd9d3d995c937b4251a5557d95d494c9be1/layout/style/res/forms.css#L728-L737)\n*/\n\n:-moz-ui-invalid {\n  box-shadow: none;\n}\n\n/*\nAdd the correct vertical alignment in Chrome and Firefox.\n*/\n\nprogress {\n  vertical-align: baseline;\n}\n\n/*\nCorrect the cursor style of increment and decrement buttons in Safari.\n*/\n\n::-webkit-inner-spin-button,\n::-webkit-outer-spin-button {\n  height: auto;\n}\n\n/*\n1. Correct the odd appearance in Chrome and Safari.\n2. Correct the outline style in Safari.\n*/\n\n[type='search'] {\n  -webkit-appearance: textfield; /* 1 */\n  outline-offset: -2px; /* 2 */\n}\n\n/*\nRemove the inner padding in Chrome and Safari on macOS.\n*/\n\n::-webkit-search-decoration {\n  -webkit-appearance: none;\n}\n\n/*\n1. Correct the inability to style clickable types in iOS and Safari.\n2. Change font properties to `inherit` in Safari.\n*/\n\n::-webkit-file-upload-button {\n  -webkit-appearance: button; /* 1 */\n  font: inherit; /* 2 */\n}\n\n/*\nAdd the correct display in Chrome and Safari.\n*/\n\nsummary {\n  display: list-item;\n}\n\n/*\nRemoves the default spacing and border for appropriate elements.\n*/\n\nblockquote,\ndl,\ndd,\nh1,\nh2,\nh3,\nh4,\nh5,\nh6,\nhr,\nfigure,\np,\npre {\n  margin: 0;\n}\n\nfieldset {\n  margin: 0;\n  padding: 0;\n}\n\nlegend {\n  padding: 0;\n}\n\nol,\nul,\nmenu {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n/*\nPrevent resizing textareas horizontally by default.\n*/\n\ntextarea {\n  resize: vertical;\n}\n\n/*\n1. Reset the default placeholder opacity in Firefox. (https://github.com/tailwindlabs/tailwindcss/issues/3300)\n2. Set the default placeholder color to the user's configured gray 400 color.\n*/\n\ninput::-moz-placeholder, textarea::-moz-placeholder {\n  opacity: 1; /* 1 */\n  color: #9ca3af; /* 2 */\n}\n\ninput::placeholder,\ntextarea::placeholder {\n  opacity: 1; /* 1 */\n  color: #9ca3af; /* 2 */\n}\n\n/*\nSet the default cursor for buttons.\n*/\n\nbutton,\n[role=\"button\"] {\n  cursor: pointer;\n}\n\n/*\nMake sure disabled buttons don't get the pointer cursor.\n*/\n:disabled {\n  cursor: default;\n}\n\n/*\n1. Make replaced elements `display: block` by default. (https://github.com/mozdevs/cssremedy/issues/14)\n2. Add `vertical-align: middle` to align replaced elements more sensibly by default. (https://github.com/jensimmons/cssremedy/issues/14#issuecomment-634934210)\n   This can trigger a poorly considered lint error in some tools but is included by design.\n*/\n\nimg,\nsvg,\nvideo,\ncanvas,\naudio,\niframe,\nembed,\nobject {\n  display: block; /* 1 */\n  vertical-align: middle; /* 2 */\n}\n\n/*\nConstrain images and videos to the parent width and preserve their intrinsic aspect ratio. (https://github.com/mozdevs/cssremedy/issues/14)\n*/\n\nimg,\nvideo {\n  max-width: 100%;\n  height: auto;\n}\n\n:root,\n[data-theme] {\n  background-color: hsla(var(--b1) / var(--tw-bg-opacity, 1));\n  color: hsla(var(--bc) / var(--tw-text-opacity, 1));\n}\n\nhtml {\n  -webkit-tap-highlight-color: transparent;\n}\n\n:root {\n  --p: 221 83% 53%;\n  --pf: 221 83% 43%;\n  --sf: 43 96% 45%;\n  --af: 0 0% 0%;\n  --nf: 0 10% 5%;\n  --b2: 0 0% 0%;\n  --b3: 0 0% 0%;\n  --bc: 0 0% 80%;\n  --pc: 221 100% 91%;\n  --sc: 43 100% 11%;\n  --ac: 0 0% 80%;\n  --nc: 0 7% 81%;\n  --inc: 198 100% 12%;\n  --suc: 158 100% 10%;\n  --wac: 43 100% 11%;\n  --erc: 0 100% 14%;\n  --rounded-box: 1rem;\n  --rounded-btn: 0.5rem;\n  --rounded-badge: 1.9rem;\n  --animation-btn: 0.25s;\n  --animation-input: .2s;\n  --btn-text-case: uppercase;\n  --btn-focus-scale: 0.95;\n  --border-btn: 1px;\n  --tab-border: 1px;\n  --tab-radius: 0.5rem;\n  --s: 43 96% 56%;\n  --a: 0 0% 0%;\n  --n: 0 10% 6%;\n  --b1: 0 0% 0%;\n  --in: 198 93% 60%;\n  --su: 158 64% 52%;\n  --wa: 43 96% 56%;\n  --er: 0 91% 71%;\n}\n\n*, ::before, ::after {\n  --tw-border-spacing-x: 0;\n  --tw-border-spacing-y: 0;\n  --tw-translate-x: 0;\n  --tw-translate-y: 0;\n  --tw-rotate: 0;\n  --tw-skew-x: 0;\n  --tw-skew-y: 0;\n  --tw-scale-x: 1;\n  --tw-scale-y: 1;\n  --tw-pan-x:  ;\n  --tw-pan-y:  ;\n  --tw-pinch-zoom:  ;\n  --tw-scroll-snap-strictness: proximity;\n  --tw-ordinal:  ;\n  --tw-slashed-zero:  ;\n  --tw-numeric-figure:  ;\n  --tw-numeric-spacing:  ;\n  --tw-numeric-fraction:  ;\n  --tw-ring-inset:  ;\n  --tw-ring-offset-width: 0px;\n  --tw-ring-offset-color: #fff;\n  --tw-ring-color: rgb(59 130 246 / 0.5);\n  --tw-ring-offset-shadow: 0 0 #0000;\n  --tw-ring-shadow: 0 0 #0000;\n  --tw-shadow: 0 0 #0000;\n  --tw-shadow-colored: 0 0 #0000;\n  --tw-blur:  ;\n  --tw-brightness:  ;\n  --tw-contrast:  ;\n  --tw-grayscale:  ;\n  --tw-hue-rotate:  ;\n  --tw-invert:  ;\n  --tw-saturate:  ;\n  --tw-sepia:  ;\n  --tw-drop-shadow:  ;\n  --tw-backdrop-blur:  ;\n  --tw-backdrop-brightness:  ;\n  --tw-backdrop-contrast:  ;\n  --tw-backdrop-grayscale:  ;\n  --tw-backdrop-hue-rotate:  ;\n  --tw-backdrop-invert:  ;\n  --tw-backdrop-opacity:  ;\n  --tw-backdrop-saturate:  ;\n  --tw-backdrop-sepia:  ;\n}\n\n::-webkit-backdrop {\n  --tw-border-spacing-x: 0;\n  --tw-border-spacing-y: 0;\n  --tw-translate-x: 0;\n  --tw-translate-y: 0;\n  --tw-rotate: 0;\n  --tw-skew-x: 0;\n  --tw-skew-y: 0;\n  --tw-scale-x: 1;\n  --tw-scale-y: 1;\n  --tw-pan-x:  ;\n  --tw-pan-y:  ;\n  --tw-pinch-zoom:  ;\n  --tw-scroll-snap-strictness: proximity;\n  --tw-ordinal:  ;\n  --tw-slashed-zero:  ;\n  --tw-numeric-figure:  ;\n  --tw-numeric-spacing:  ;\n  --tw-numeric-fraction:  ;\n  --tw-ring-inset:  ;\n  --tw-ring-offset-width: 0px;\n  --tw-ring-offset-color: #fff;\n  --tw-ring-color: rgb(59 130 246 / 0.5);\n  --tw-ring-offset-shadow: 0 0 #0000;\n  --tw-ring-shadow: 0 0 #0000;\n  --tw-shadow: 0 0 #0000;\n  --tw-shadow-colored: 0 0 #0000;\n  --tw-blur:  ;\n  --tw-brightness:  ;\n  --tw-contrast:  ;\n  --tw-grayscale:  ;\n  --tw-hue-rotate:  ;\n  --tw-invert:  ;\n  --tw-saturate:  ;\n  --tw-sepia:  ;\n  --tw-drop-shadow:  ;\n  --tw-backdrop-blur:  ;\n  --tw-backdrop-brightness:  ;\n  --tw-backdrop-contrast:  ;\n  --tw-backdrop-grayscale:  ;\n  --tw-backdrop-hue-rotate:  ;\n  --tw-backdrop-invert:  ;\n  --tw-backdrop-opacity:  ;\n  --tw-backdrop-saturate:  ;\n  --tw-backdrop-sepia:  ;\n}\n\n::backdrop {\n  --tw-border-spacing-x: 0;\n  --tw-border-spacing-y: 0;\n  --tw-translate-x: 0;\n  --tw-translate-y: 0;\n  --tw-rotate: 0;\n  --tw-skew-x: 0;\n  --tw-skew-y: 0;\n  --tw-scale-x: 1;\n  --tw-scale-y: 1;\n  --tw-pan-x:  ;\n  --tw-pan-y:  ;\n  --tw-pinch-zoom:  ;\n  --tw-scroll-snap-strictness: proximity;\n  --tw-ordinal:  ;\n  --tw-slashed-zero:  ;\n  --tw-numeric-figure:  ;\n  --tw-numeric-spacing:  ;\n  --tw-numeric-fraction:  ;\n  --tw-ring-inset:  ;\n  --tw-ring-offset-width: 0px;\n  --tw-ring-offset-color: #fff;\n  --tw-ring-color: rgb(59 130 246 / 0.5);\n  --tw-ring-offset-shadow: 0 0 #0000;\n  --tw-ring-shadow: 0 0 #0000;\n  --tw-shadow: 0 0 #0000;\n  --tw-shadow-colored: 0 0 #0000;\n  --tw-blur:  ;\n  --tw-brightness:  ;\n  --tw-contrast:  ;\n  --tw-grayscale:  ;\n  --tw-hue-rotate:  ;\n  --tw-invert:  ;\n  --tw-saturate:  ;\n  --tw-sepia:  ;\n  --tw-drop-shadow:  ;\n  --tw-backdrop-blur:  ;\n  --tw-backdrop-brightness:  ;\n  --tw-backdrop-contrast:  ;\n  --tw-backdrop-grayscale:  ;\n  --tw-backdrop-hue-rotate:  ;\n  --tw-backdrop-invert:  ;\n  --tw-backdrop-opacity:  ;\n  --tw-backdrop-saturate:  ;\n  --tw-backdrop-sepia:  ;\n}\r\n.btn {\n  display: inline-flex;\n  flex-shrink: 0;\n  cursor: pointer;\n  -webkit-user-select: none;\n  -moz-user-select: none;\n       user-select: none;\n  flex-wrap: wrap;\n  align-items: center;\n  justify-content: center;\n  border-color: transparent;\n  border-color: hsl(var(--n) / var(--tw-border-opacity));\n  text-align: center;\n  transition-property: color, background-color, border-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-text-decoration-color, -webkit-backdrop-filter;\n  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;\n  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-text-decoration-color, -webkit-backdrop-filter;\n  transition-duration: 200ms;\n  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);\n  border-radius: var(--rounded-btn, 0.5rem);\n  height: 3rem;\n  padding-left: 1rem;\n  padding-right: 1rem;\n  font-size: 0.875rem;\n  line-height: 1.25rem;\n  line-height: 1em;\n  min-height: 3rem;\n  font-weight: 600;\n  text-transform: uppercase;\n  text-transform: var(--btn-text-case, uppercase);\n  -webkit-text-decoration-line: none;\n  text-decoration-line: none;\n  border-width: var(--border-btn, 1px);\n  -webkit-animation: button-pop var(--animation-btn, 0.25s) ease-out;\n          animation: button-pop var(--animation-btn, 0.25s) ease-out;\n  --tw-border-opacity: 1;\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--n) / var(--tw-bg-opacity));\n  --tw-text-opacity: 1;\n  color: hsl(var(--nc) / var(--tw-text-opacity));\n}\r\n.btn-disabled, \n  .btn[disabled] {\n  pointer-events: none;\n}\r\n.btn-circle {\n  height: 3rem;\n  width: 3rem;\n  border-radius: 9999px;\n  padding: 0px;\n}\r\n.btn.loading, \n    .btn.loading:hover {\n  pointer-events: none;\n}\r\n.btn.loading:before {\n  margin-right: 0.5rem;\n  height: 1rem;\n  width: 1rem;\n  border-radius: 9999px;\n  border-width: 2px;\n  -webkit-animation: spin 2s linear infinite;\n          animation: spin 2s linear infinite;\n  content: \"\";\n  border-top-color: transparent;\n  border-left-color: transparent;\n  border-bottom-color: currentColor;\n  border-right-color: currentColor;\n}\r\n@media (prefers-reduced-motion: reduce) {\n\n  .btn.loading:before {\n    -webkit-animation: spin 10s linear infinite;\n            animation: spin 10s linear infinite;\n  }\n}\r\n@-webkit-keyframes spin {\n\n  from {\n    transform: rotate(0deg);\n  }\n\n  to {\n    transform: rotate(360deg);\n  }\n}\r\n@keyframes spin {\n\n  from {\n    transform: rotate(0deg);\n  }\n\n  to {\n    transform: rotate(360deg);\n  }\n}\r\n.btn-group > input[type=\"radio\"].btn {\n  -webkit-appearance: none;\n     -moz-appearance: none;\n          appearance: none;\n}\r\n.btn-group > input[type=\"radio\"].btn:before {\n  content: attr(data-title);\n}\r\n.radial-progress {\n  position: relative;\n  display: inline-grid;\n  height: var(--size);\n  width: var(--size);\n  place-content: center;\n  border-radius: 9999px;\n  background-color: transparent;\n  vertical-align: middle;\n  box-sizing: content-box;\n  --value: 0;\n  --size: 5rem;\n  --thickness: calc(var(--size) / 10);\n}\r\n.radial-progress::-moz-progress-bar {\n  -moz-appearance: none;\n       appearance: none;\n  background-color: transparent;\n}\r\n.radial-progress::-webkit-progress-value {\n  -webkit-appearance: none;\n          appearance: none;\n  background-color: transparent;\n}\r\n.radial-progress::-webkit-progress-bar {\n  -webkit-appearance: none;\n          appearance: none;\n  background-color: transparent;\n}\r\n.radial-progress:before, \n.radial-progress:after {\n  position: absolute;\n  border-radius: 9999px;\n  content: \"\";\n}\r\n.radial-progress:before {\n  top: 0px;\n  right: 0px;\n  bottom: 0px;\n  left: 0px;\n  background: radial-gradient(farthest-side, currentColor 98%, #0000) top/var(--thickness) var(--thickness) no-repeat, conic-gradient(currentColor calc(var(--value) * 1%), #0000 0);\n  -webkit-mask: radial-gradient(farthest-side, #0000 calc(99% - var(--thickness)), #000 calc(100% - var(--thickness)));\n  mask: radial-gradient(farthest-side, #0000 calc(99% - var(--thickness)), #000 calc(100% - var(--thickness)));\n}\r\n.radial-progress:after {\n  inset: calc(50% - var(--thickness) / 2);\n  transform: rotate(calc(var(--value) * 3.6deg - 90deg)) translate(calc(var(--size) / 2 - 50%));\n  background-color: currentColor;\n}\r\n.range {\n  height: 1.5rem;\n  width: 100%;\n  cursor: pointer;\n  -webkit-appearance: none;\n  --range-shdw: var(--bc);\n  overflow: hidden;\n  background-color: transparent;\n  border-radius: var(--rounded-box, 1rem);\n}\r\n.range:focus {\n  outline: none;\n}\r\n.btn-outline.btn-accent .badge {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--a) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--a) / var(--tw-bg-opacity));\n  --tw-text-opacity: 1;\n  color: hsl(var(--ac) / var(--tw-text-opacity));\n}\r\n.btn-outline.btn-accent .badge-outline {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--a) / var(--tw-border-opacity));\n  background-color: transparent;\n  --tw-text-opacity: 1;\n  color: hsl(var(--a) / var(--tw-text-opacity));\n}\r\n.btn-outline.btn-accent:hover .badge {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--ac) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--ac) / var(--tw-bg-opacity));\n  --tw-text-opacity: 1;\n  color: hsl(var(--a) / var(--tw-text-opacity));\n}\r\n.btn-outline.btn-accent:hover .badge.outline {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--ac) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--af, var(--a)) / var(--tw-bg-opacity));\n  --tw-text-opacity: 1;\n  color: hsl(var(--ac) / var(--tw-text-opacity));\n}\r\n.btn:active:hover,\n  .btn:active:focus {\n  -webkit-animation: none;\n          animation: none;\n  transform: scale(var(--btn-focus-scale, 0.95));\n}\r\n.btn:hover, \n    .btn-active {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--nf, var(--n)) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--nf, var(--n)) / var(--tw-bg-opacity));\n}\r\n.btn:focus-visible {\n  outline: 2px solid hsl(var(--nf));\n  outline-offset: 2px;\n}\r\n.btn-accent {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--a) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--a) / var(--tw-bg-opacity));\n  --tw-text-opacity: 1;\n  color: hsl(var(--ac) / var(--tw-text-opacity));\n}\r\n.btn-accent:hover, \n    .btn-accent.btn-active {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--af, var(--a)) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--af, var(--a)) / var(--tw-bg-opacity));\n}\r\n.btn-accent:focus-visible {\n  outline: 2px solid hsl(var(--a));\n}\r\n.btn.glass:hover,\n    .btn.glass.btn-active {\n  --glass-opacity: 25%;\n  --glass-border-opacity: 15%;\n}\r\n.btn.glass:focus-visible {\n  outline: 2px solid 0 0 2px currentColor;\n}\r\n.btn-outline.btn-accent {\n  --tw-text-opacity: 1;\n  color: hsl(var(--a) / var(--tw-text-opacity));\n}\r\n.btn-outline.btn-accent:hover {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--af, var(--a)) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--af, var(--a)) / var(--tw-bg-opacity));\n  --tw-text-opacity: 1;\n  color: hsl(var(--ac) / var(--tw-text-opacity));\n}\r\n.btn-disabled, \n  .btn-disabled:hover, \n  .btn[disabled], \n  .btn[disabled]:hover {\n  --tw-border-opacity: 0;\n  background-color: hsl(var(--n) / var(--tw-bg-opacity));\n  --tw-bg-opacity: 0.2;\n  color: hsl(var(--bc) / var(--tw-text-opacity));\n  --tw-text-opacity: 0.2;\n}\r\n.btn.loading.btn-square:before, \n    .btn.loading.btn-circle:before {\n  margin-right: 0px;\n}\r\n.btn.loading.btn-xl:before, \n    .btn.loading.btn-lg:before {\n  height: 1.25rem;\n  width: 1.25rem;\n}\r\n.btn.loading.btn-sm:before, \n    .btn.loading.btn-xs:before {\n  height: 0.75rem;\n  width: 0.75rem;\n}\r\n.btn-group > input[type=\"radio\"]:checked.btn, \n  .btn-group > .btn-active {\n  --tw-border-opacity: 1;\n  border-color: hsl(var(--p) / var(--tw-border-opacity));\n  --tw-bg-opacity: 1;\n  background-color: hsl(var(--p) / var(--tw-bg-opacity));\n  --tw-text-opacity: 1;\n  color: hsl(var(--pc) / var(--tw-text-opacity));\n}\r\n.btn-group > input[type=\"radio\"]:checked.btn:focus-visible, .btn-group > .btn-active:focus-visible {\n  outline: 2px solid hsl(var(--p));\n}\r\n.btn-group:not(.btn-group-vertical) > .btn:not(:first-of-type) {\n  margin-left: -1px;\n  border-top-left-radius: 0px;\n  border-bottom-left-radius: 0px;\n}\r\n.btn-group:not(.btn-group-vertical) > .btn:not(:last-of-type) {\n  border-top-right-radius: 0px;\n  border-bottom-right-radius: 0px;\n}\r\n.btn-group-vertical > .btn:not(:first-of-type) {\n  margin-top: -1px;\n  border-top-left-radius: 0px;\n  border-top-right-radius: 0px;\n}\r\n.btn-group-vertical > .btn:not(:last-of-type) {\n  border-bottom-right-radius: 0px;\n  border-bottom-left-radius: 0px;\n}\r\n@-webkit-keyframes button-pop {\n\n  0% {\n    transform: scale(var(--btn-focus-scale, 0.95));\n  }\n\n  40% {\n    transform: scale(1.02);\n  }\n\n  100% {\n    transform: scale(1);\n  }\n}\r\n@keyframes button-pop {\n\n  0% {\n    transform: scale(var(--btn-focus-scale, 0.95));\n  }\n\n  40% {\n    transform: scale(1.02);\n  }\n\n  100% {\n    transform: scale(1);\n  }\n}\r\n@-webkit-keyframes checkmark {\n\n  0% {\n    background-position-y: 5px;\n  }\n\n  50% {\n    background-position-y: -2px;\n  }\n\n  100% {\n    background-position-y: 0;\n  }\n}\r\n@keyframes checkmark {\n\n  0% {\n    background-position-y: 5px;\n  }\n\n  50% {\n    background-position-y: -2px;\n  }\n\n  100% {\n    background-position-y: 0;\n  }\n}\r\n.drawer-toggle:focus-visible ~ .drawer-content .drawer-button.btn-accent {\n  outline: 2px solid hsl(var(--a));\n}\r\n@-webkit-keyframes progress-loading {\n\n  50% {\n    left: 107%;\n  }\n}\r\n@keyframes progress-loading {\n\n  50% {\n    left: 107%;\n  }\n}\r\n@-webkit-keyframes radiomark {\n\n  0% {\n    box-shadow: 0 0 0 12px hsl(var(--b1)) inset, 0 0 0 12px hsl(var(--b1)) inset;\n  }\n\n  50% {\n    box-shadow: 0 0 0 3px hsl(var(--b1)) inset, 0 0 0 3px hsl(var(--b1)) inset;\n  }\n\n  100% {\n    box-shadow: 0 0 0 4px hsl(var(--b1)) inset, 0 0 0 4px hsl(var(--b1)) inset;\n  }\n}\r\n@keyframes radiomark {\n\n  0% {\n    box-shadow: 0 0 0 12px hsl(var(--b1)) inset, 0 0 0 12px hsl(var(--b1)) inset;\n  }\n\n  50% {\n    box-shadow: 0 0 0 3px hsl(var(--b1)) inset, 0 0 0 3px hsl(var(--b1)) inset;\n  }\n\n  100% {\n    box-shadow: 0 0 0 4px hsl(var(--b1)) inset, 0 0 0 4px hsl(var(--b1)) inset;\n  }\n}\r\n.range:focus-visible::-webkit-slider-thumb {\n  --focus-shadow: 0 0 0 6px hsl(var(--b1)) inset, 0 0 0 2rem hsl(var(--range-shdw)) inset;\n}\r\n.range:focus-visible::-moz-range-thumb {\n  --focus-shadow: 0 0 0 6px hsl(var(--b1)) inset, 0 0 0 2rem hsl(var(--range-shdw)) inset;\n}\r\n.range::-webkit-slider-runnable-track {\n  height: 0.5rem;\n  width: 100%;\n  border-radius: var(--rounded-box, 1rem);\n  background-color: hsla(var(--bc) / 0.1);\n}\r\n.range::-moz-range-track {\n  height: 0.5rem;\n  width: 100%;\n  border-radius: var(--rounded-box, 1rem);\n  background-color: hsla(var(--bc) / 0.1);\n}\r\n.range::-webkit-slider-thumb {\n  background-color: hsl(var(--b1));\n  position: relative;\n  height: 1.5rem;\n  width: 1.5rem;\n  border-style: none;\n  border-radius: var(--rounded-box, 1rem);\n  -webkit-appearance: none;\n  top: 50%;\n  color: hsl(var(--range-shdw));\n  transform: translateY(-50%);\n  --filler-size: 100rem;\n  --filler-offset: 0.6rem;\n  box-shadow: 0 0 0 3px hsl(var(--range-shdw)) inset, var(--focus-shadow, 0 0), calc(var(--filler-size) * -1 - var(--filler-offset)) 0 0 var(--filler-size);\n}\r\n.range::-moz-range-thumb {\n  background-color: hsl(var(--b1));\n  position: relative;\n  height: 1.5rem;\n  width: 1.5rem;\n  border-style: none;\n  border-radius: var(--rounded-box, 1rem);\n  top: 50%;\n  color: hsl(var(--range-shdw));\n  --filler-size: 100rem;\n  --filler-offset: 0.5rem;\n  box-shadow: 0 0 0 3px hsl(var(--range-shdw)) inset, var(--focus-shadow, 0 0), calc(var(--filler-size) * -1 - var(--filler-offset)) 0 0 var(--filler-size);\n}\r\n@-webkit-keyframes rating-pop {\n\n  0% {\n    transform: translateY(-0.125em);\n  }\n\n  40% {\n    transform: translateY(-0.125em);\n  }\n\n  100% {\n    transform: translateY(0);\n  }\n}\r\n@keyframes rating-pop {\n\n  0% {\n    transform: translateY(-0.125em);\n  }\n\n  40% {\n    transform: translateY(-0.125em);\n  }\n\n  100% {\n    transform: translateY(0);\n  }\n}\r\n.btn-lg {\n  height: 4rem;\n  padding-left: 1.5rem;\n  padding-right: 1.5rem;\n  min-height: 4rem;\n  font-size: 1.125rem;\n}\r\n.btn-square:where(.btn-lg) {\n  height: 4rem;\n  width: 4rem;\n  padding: 0px;\n}\r\n.btn-circle:where(.btn-xs) {\n  height: 1.5rem;\n  width: 1.5rem;\n  border-radius: 9999px;\n  padding: 0px;\n}\r\n.btn-circle:where(.btn-sm) {\n  height: 2rem;\n  width: 2rem;\n  border-radius: 9999px;\n  padding: 0px;\n}\r\n.btn-circle:where(.btn-md) {\n  height: 3rem;\n  width: 3rem;\n  border-radius: 9999px;\n  padding: 0px;\n}\r\n.btn-circle:where(.btn-lg) {\n  height: 4rem;\n  width: 4rem;\n  border-radius: 9999px;\n  padding: 0px;\n}\r\n.fixed {\n  position: fixed;\n}\r\n.z-20 {\n  z-index: 20;\n}\r\n.z-30 {\n  z-index: 30;\n}\r\n.z-10 {\n  z-index: 10;\n}\r\n.z-50 {\n  z-index: 50;\n}\r\n.z-40 {\n  z-index: 40;\n}\r\n.-ml-\\[127px\\] {\n  margin-left: -127px;\n}\r\n.-mt-\\[127px\\] {\n  margin-top: -127px;\n}\r\n.ml-\\[450px\\] {\n  margin-left: 450px;\n}\r\n.ml-\\[100px\\] {\n  margin-left: 100px;\n}\r\n.mt-\\[100px\\] {\n  margin-top: 100px;\n}\r\n.-mt-\\[158px\\] {\n  margin-top: -158px;\n}\r\n.-ml-\\[80px\\] {\n  margin-left: -80px;\n}\r\n.grid {\n  display: grid;\n}\r\n.h-screen {\n  height: 100vh;\n}\r\n.h-\\[90px\\] {\n  height: 90px;\n}\r\n.w-\\[160px\\] {\n  width: 160px;\n}\r\n.transform {\n  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));\n}\r\n.place-items-center {\n  place-items: center;\n}\r\n.overflow-hidden {\n  overflow: hidden;\n}\r\n.overflow-visible {\n  overflow: visible;\n}\r\n.rounded-full {\n  border-radius: 9999px;\n}\r\n.border-4 {\n  border-width: 4px;\n}\r\n.border-dotted {\n  border-style: dotted;\n}\r\n.border-green-500 {\n  --tw-border-opacity: 1;\n  border-color: rgb(34 197 94 / var(--tw-border-opacity));\n}\r\n.text-center {\n  text-align: center;\n}\r\n.text-8xl {\n  font-size: 6rem;\n  line-height: 1;\n}\r\n.font-bold {\n  font-weight: 700;\n}\r\n.text-white {\n  --tw-text-opacity: 1;\n  color: rgb(255 255 255 / var(--tw-text-opacity));\n}\r\n.text-green-600 {\n  --tw-text-opacity: 1;\n  color: rgb(22 163 74 / var(--tw-text-opacity));\n}\r\n/*My hatred for CSS is present in the emptiness of this file*/\r\n\r\n";
     styleInject(css_248z);
 
     const app = new App({

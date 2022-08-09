@@ -9,7 +9,6 @@
     let scale = Math.min(innerWidth/$fieldWidth, innerHeight/$fieldHeight)*0.98
     let yOff = (innerHeight-$fieldHeight*scale)/2
     let xOff = (innerWidth-$fieldWidth*scale)/2
-
     $: innerWidth = 0
     $: innerHeight = 0
     $: rescale(innerWidth, innerHeight)
