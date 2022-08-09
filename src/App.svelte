@@ -6,8 +6,19 @@
     import {addDoc, collection, getDocs} from "firebase/firestore";
     import {db} from "./firebase";
     import TimeKeeper from "./TimeKeeper.svelte";
-    let yOff = (innerHeight-$fieldHeight)/2
-    let xOff = (innerWidth-$fieldWidth)/2
+    let scale = Math.min(innerWidth/$fieldWidth, innerHeight/$fieldHeight)*0.98
+    let yOff = (innerHeight-$fieldHeight*scale)/2
+    let xOff = (innerWidth-$fieldWidth*scale)/2
+
+    $: innerWidth = 0
+    $: innerHeight = 0
+    $: rescale(innerWidth, innerHeight)
+
+    function rescale(){
+        scale = Math.min(innerWidth/$fieldWidth, innerHeight/$fieldHeight)*0.98
+        yOff = (innerHeight-$fieldHeight*scale)/2
+        xOff = (innerWidth-$fieldWidth*scale)/2
+    }
 
     // try {
     //    addDoc(collection(db, "leaderboard"), {
@@ -28,8 +39,9 @@
 
 </script>
 
-<div class=" fixed" style=" transform:
-     translate({xOff}px,{yOff}px)">
+<svelte:window bind:innerWidth bind:innerHeight/>
+
+<div class="fixed" style="transform: translate({xOff}px,{yOff}px) scale({scale})">
 <Field/>
 </div>
 <TimeKeeper/>

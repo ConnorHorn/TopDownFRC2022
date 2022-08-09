@@ -1,6 +1,7 @@
 <script>
     import {onInterval} from './utils.js';
     import {
+        reset,
         globalSpeedX,
         globalSpeedY,
         ballBoxFrontLeft,
@@ -45,6 +46,7 @@
     let turretSpeed = 3;
     let turretGoal = 0;
     let turretLockedOn = false;
+    let turretSecretLockedOn = false;
     let ballShotPace = 18;
     let lastBallShot = -1000;
     let ballsShot = [];
@@ -53,10 +55,23 @@
     onInterval(countUp, 15);
 
     $ : {
+        resetBot($reset)
         calcMovement(milliCount)
         calcRotation(milliCount)
         manageIntake(milliCount)
         manageTurret(milliCount)
+    }
+
+    function resetBot(){
+        if($reset) {
+            turretAngle = 0;
+            x = 100;
+            y = 100;
+            yValue = 0;
+            xValue = 0;
+            rot = 0;
+        }
+        $reset=false;
     }
 
     function calcRotation() {
@@ -250,6 +265,13 @@
         } else {
             turretLockedOn = false;
         }
+        //Enable to allow for shooting from range if turret is aligned, even if out of range
+        if (Math.min(Math.abs(turretAngle - turretGoal),Math.abs(360-turretGoal+turretAngle)) < turretSpeed * 3 && distanceFromGoal < $vizRingSize / 2 +100){
+            turretSecretLockedOn=true;
+        }
+        else{
+            turretSecretLockedOn=false;
+        }
         if (distanceFromGoal > $vizRingSize / 2) {
             turretLockedOn = false;
         }
@@ -380,7 +402,7 @@
                         startY: $coords.y,
                         endX: $centerCoords.x,
                         endY: $centerCoords.y,
-                        miss: !turretLockedOn,
+                        miss: !(turretLockedOn || turretSecretLockedOn),
                         id: activeBallID
                     });
                     activeBallID++;

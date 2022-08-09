@@ -9,11 +9,11 @@ import {
     globalX,
     globalY,
     globalAngle,
-    ballBoxFrontLeft, ballBoxFrontRight, ballBoxBackRight, ballBoxBackLeft
+    ballBoxFrontLeft, ballBoxFrontRight, ballBoxBackRight, ballBoxBackLeft, reset
 } from "./stores";
 import {onInterval} from "./utils";
 
-let floorBalls = [[$fieldWidth/2, $fieldHeight/2]];
+let floorBalls = [];
 let milliCount = 0;
 const countUp = () => (milliCount += 1);
 onInterval(countUp, 10);
@@ -21,9 +21,17 @@ onInterval(countUp, 10);
 
 let numberOfBallOnField=6;
 $: {
+    resetBalls($reset)
     occupyField(milliCount);
     clearIllegalBalls(floorBalls);
 }
+
+function resetBalls(){
+    if($reset){
+        floorBalls=[];
+    }
+}
+
 function handleIntake(event){
     for(let i = 0; i < floorBalls.length; i++){
         if(floorBalls[i][0]===event.detail.x && floorBalls[i][1]===event.detail.y){
@@ -68,7 +76,7 @@ function clearIllegalBalls(){
 }
 
 function occupyField(){
-    while($fieldBallCount<numberOfBallOnField-1){
+    while($fieldBallCount<numberOfBallOnField){
         let x = Math.floor(Math.random()*$fieldWidth);
         let y = Math.floor(Math.random()*$fieldHeight);
         let ball = [x,y];

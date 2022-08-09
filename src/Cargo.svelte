@@ -65,15 +65,17 @@
         let robotPolygon = [[$ballBoxFrontLeft.x, $ballBoxFrontLeft.y], [$ballBoxFrontRight.x, $ballBoxFrontRight.y], [$ballBoxBackRight.x, $ballBoxBackRight.y], [$ballBoxBackLeft.x, $ballBoxBackLeft.y]]
         insideRobot = inside(coords, robotPolygon)
         if(insideRobot){
-            if(Math.abs($globalSpeedX)>Math.abs(speedX)){
-                speedX=$globalSpeedX;
+            if(Math.abs($globalSpeedX)>Math.abs(speedX) || Math.sign($globalSpeedX)!==Math.sign(speedX)){
+                speedX = $globalSpeedX;
             }
-            if(Math.abs($globalSpeedY)>Math.abs(speedY)) {
+            if(Math.abs($globalSpeedY)>Math.abs(speedY) || Math.sign($globalSpeedY)!==Math.sign(speedY)) {
                 speedY = $globalSpeedY;
             }
         }
-        coords[0]+=speedX;
-        coords[1]-=speedY;
+        // if(!inside([[coords[0]+speedX],[coords[1]-speedY]],robotPolygon)) {
+            coords[0] += speedX;
+            coords[1] -= speedY;
+        // }
         if(speedX>0){
             speedX-=speedDecay;
         }
