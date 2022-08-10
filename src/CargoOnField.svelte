@@ -2,11 +2,11 @@
 
 import Cargo from "./Cargo.svelte";
 import {
-    ballsInRobot,
+    robotDatas,
     fieldHeight,
     fieldWidth,
     fieldBallCount,
-    reset, robotBallBox
+    reset
 } from "./stores";
 import {onInterval} from "./utils";
 
@@ -34,7 +34,7 @@ function handleIntake(event){
         if(floorBalls[i][0]===event.detail.x && floorBalls[i][1]===event.detail.y){
             floorBalls[i][0]=-100;
             floorBalls[i][1]=-100;
-            $ballsInRobot++;
+            $robotDatas[event.detail.robotIndex].ballsInRobot+=1;
             floorBalls=floorBalls;
         }
     }
@@ -78,7 +78,7 @@ function occupyField(){
         let x = Math.floor(Math.random()*$fieldWidth);
         let y = Math.floor(Math.random()*$fieldHeight);
         let ball = [x,y];
-        if(!floorBalls.includes(ball)  && !inside(ball,[[$robotBallBox.x1,$robotBallBox.y1],[$robotBallBox.x2,$robotBallBox.y2],[$robotBallBox.x3,$robotBallBox.y3],[$robotBallBox.x4,$robotBallBox.y4]]) && Math.sqrt((ball[0]-$fieldWidth/2)**2+(ball[1]-$fieldHeight/2)**2)>150){
+        if(!floorBalls.includes(ball) && Math.sqrt((ball[0]-$fieldWidth/2)**2+(ball[1]-$fieldHeight/2)**2)>150){
             $fieldBallCount++
             floorBalls.push(ball);
             floorBalls=floorBalls;

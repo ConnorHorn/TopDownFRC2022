@@ -1,8 +1,7 @@
 <script>
     import {onInterval} from "./utils";
     import {
-        ballsInRobot, fieldHeight, fieldWidth, globalSpeedX, globalSpeedY,
-        intake, robotBallBox
+        fieldHeight, fieldWidth, robotDatas
     } from "./stores";
     import { createEventDispatcher } from 'svelte';
 
@@ -21,22 +20,24 @@
         checkInside(milliCount)
         pushBall(milliCount)
     }
-    function intook() {
+    function intook(i) {
         speedX=0;
         speedY=0;
         dispatch('intake', {
             x: coords[0],
-            y: coords[1]
+            y: coords[1],
+            robotIndex: i
         });
     }
 
     function checkInside(){
-        let polygon = [[$intake.x1,$intake.y1],[$intake.x2,$intake.y2],[$intake.x3,$intake.y3],[$intake.x4,$intake.y4]]
-        insideIntake=inside(coords,polygon)
-        if(insideIntake && $ballsInRobot<2){
-            intook();
+        for(let i=0; i<$robotDatas.length; i++) {
+            let polygon = [[$robotDatas[i].intake.x1, $robotDatas[i].intake.y1], [$robotDatas[i].intake.x2, $robotDatas[i].intake.y2], [$robotDatas[i].intake.x3, $robotDatas[i].intake.y3], [$robotDatas[i].intake.x4, $robotDatas[i].intake.y4]]
+            insideIntake = inside(coords, polygon)
+            if (insideIntake && $robotDatas[i].ballsInRobot < 2) {
+                intook(i);
+            }
         }
-
     }
 
     function inside(point, vs) {
@@ -56,14 +57,16 @@
     }
 
     function pushBall() {
-        let robotPolygon = [[$robotBallBox.x1,$robotBallBox.y1],[$robotBallBox.x2,$robotBallBox.y2],[$robotBallBox.x3,$robotBallBox.y3],[$robotBallBox.x4,$robotBallBox.y4]]
-        insideRobot = inside(coords, robotPolygon)
-        if(insideRobot){
-            if(Math.abs($globalSpeedX)>Math.abs(speedX) || Math.sign($globalSpeedX)!==Math.sign(speedX)){
-                speedX = $globalSpeedX;
-            }
-            if(Math.abs($globalSpeedY)>Math.abs(speedY) || Math.sign($globalSpeedY)!==Math.sign(speedY)) {
-                speedY = $globalSpeedY;
+        for(let y=0;y<$robotDatas.length;y++) {
+            let robotPolygon = [[$robotDatas[y].robotBallBox.x1, $robotDatas[y].robotBallBox.y1], [$robotDatas[y].robotBallBox.x2, $robotDatas[y].robotBallBox.y2], [$robotDatas[y].robotBallBox.x3, $robotDatas[y].robotBallBox.y3], [$robotDatas[y].robotBallBox.x4, $robotDatas[y].robotBallBox.y4]]
+            insideRobot = inside(coords, robotPolygon)
+            if (insideRobot) {
+                if (Math.abs($robotDatas[y].robotSpeeds.x) > Math.abs(speedX) || Math.sign($robotDatas[y].robotSpeeds.x) !== Math.sign(speedX)) {
+                    speedX = $robotDatas[y].robotSpeeds.x;
+                }
+                if (Math.abs($robotDatas[y].robotSpeeds.y) > Math.abs(speedY) || Math.sign($robotDatas[y].robotSpeeds.y) !== Math.sign(speedY)) {
+                    speedY = $robotDatas[y].robotSpeeds.y;
+                }
             }
         }
         // if(!inside([[coords[0]+speedX],[coords[1]-speedY]],robotPolygon)) {
@@ -83,7 +86,6 @@
             speedY+=speedDecay;
         }
         isWhereItShouldntBe();
-
     }
 
     function isWhereItShouldntBe(){

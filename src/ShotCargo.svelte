@@ -1,10 +1,11 @@
 <script>
     import {writable} from "svelte/store";
     import {onInterval} from "./utils";
-    import {ballsInRobot, fieldBallCount, matchTime, score, storeTurretAngle} from "./stores";
+    import {fieldBallCount, matchTime, robotDatas, score} from "./stores";
     import { createEventDispatcher } from 'svelte';
 
     const dispatch = createEventDispatcher();
+    export let dataIndex;
     export let startX = 0;
     export let startY = 0;
     export let endX = 0;
@@ -27,18 +28,18 @@
     let minBallSize=55, maxBallSize=90, endBallSize=60;
     let ballSize=minBallSize;
     if(miss){
-        angle=($storeTurretAngle-90)*(Math.PI/180);
+        angle=($robotDatas[dataIndex].turretAngle+$robotDatas[dataIndex].robotAngle-90) * (Math.PI/180);
         lengthHype=2000
         pace=6;
         endBallSize=minBallSize-5;
     }
-    console.log(angle)
+    console.log($robotDatas[dataIndex].turretAngle+" "+angle)
     const countUp = () => (milliCount += pace);
     onInterval(countUp, 1);
     $: {
         move(milliCount)
     }
-    $ballsInRobot--;
+    $robotDatas[dataIndex].ballsInRobot--;
     function move(){
         if(milliCount<=lengthHype) {
             if(milliCount<=lengthHype/2){
