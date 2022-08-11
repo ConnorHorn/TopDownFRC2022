@@ -74,7 +74,11 @@ function clearIllegalBalls(){
 }
 
 function occupyField(){
-    while($fieldBallCount<numberOfBallOnField){
+    let ballSum=0;
+    for(let i=0;i<$robotDatas.length;i++){
+        ballSum+=$robotDatas[i].ballsInRobot
+    }
+    while($fieldBallCount+ballSum<numberOfBallOnField){
         let x = Math.floor(Math.random()*$fieldWidth);
         let y = Math.floor(Math.random()*$fieldHeight);
         let ball = [x,y];

@@ -15,6 +15,7 @@
     import TeleRobot from "./TeleRobot.svelte";
     import RobotManager from "./RobotManager.svelte";
     import {robotData} from "./robotData";
+    import VizRing from "./VizRing.svelte";
 
     let maxTime = $matchTime;
     let liveTime = $matchTime;
@@ -39,6 +40,11 @@
         for (let i = 0; i < $robotDatas.length; i++) {
             $robotDatas[i].ballsInRobot = 0;
         }
+        undoReset();
+    }
+
+    function undoReset() {
+        $reset = false;
     }
 </script>
 
@@ -89,11 +95,7 @@
         <CargoOnField/>
         <RobotManager />
     </div>
-    {#if $vizRing}
-        <div class="rounded-full border-green-500 border-4 border-dotted fixed z-90 ml-[450px]"
-             style="height:{$vizRingSize}px; width:{$vizRingSize}px">
-        </div>
-    {/if}
+    <VizRing class="fixed z-60"/>
 </div>
 
 

@@ -1,5 +1,5 @@
 import {writable} from "svelte/store";
-export const numberOfRobots=writable(5);
+export const numberOfRobots=writable(2);
 export const matchTime= writable(150);
 export const fieldWidth=writable(1800);
 export const fieldHeight=writable(900);
@@ -22,6 +22,11 @@ export const fieldBallCount=writable(0);
 //---------------------------------------------------
 //Generic Robot
 export const robotDatas=writable([])
+
+export const controls=writable([
+    {up:'w', left:'a', down:'s', right:'d', shoot: 't', turnLeft: 'f', turnRight: 'h', viz: 'shift'},
+    {up:'i', left:'j', down:'k', right:'l', shoot: '[', turnLeft: ';', turnRight: 'enter', viz: 'n'}
+])
 
 
 

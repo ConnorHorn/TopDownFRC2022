@@ -6,30 +6,19 @@
         fieldHeight,
         vizRingSize,
         vizRing,
-        robotDatas
+        robotDatas, controls
     } from "./stores";
     import {writable} from "svelte/store";
     import ShotCargo from "./ShotCargo.svelte";
 
     export let dataIndex;
-    let x = $robotDatas[dataIndex].robotCoords.x;
-    let y = $robotDatas[dataIndex].robotCoords.y;
-    let rot = $robotDatas[dataIndex].robotAngle;
-    let turretAngle = $robotDatas[dataIndex].turretAngle;
-    let balls = $robotDatas[dataIndex].ballsInRobot;
-    let intakeCoords = $robotDatas[dataIndex].intake;
-    let ballBox = $robotDatas[dataIndex].robotBallBox;
-    let speeds = $robotDatas[dataIndex].robotSpeeds;
-    let color = $robotDatas[dataIndex].color;
-    let config = $robotDatas[dataIndex].config;
-
-    console.log(dataIndex)
+    console.log("coord"+$robotDatas[dataIndex].robotCoords.x)
 
     let speedModifier = 0.3;
     let shiftDown = false, wDown = false, aDown = false, sDown = false, dDown = false, jDown = false, lDown = false,
         spaceDown = false;
     let yValue = 0, xValue = 0;
-    const coords = writable({x: x, y: y});
+    const coords = writable({x: $robotDatas[dataIndex].robotCoords.x, y: $robotDatas[dataIndex].robotCoords.y});
     let centerCoords = writable({x: $fieldWidth / 2, y: $fieldHeight / 2})
     let maxYAcc = 100, maxXAcc = 100;
     let maxRotAcc = 8, maxRotSpeed = 700, rotAcc = 0, rotDecay = 0.3, rotPace = 0.5;
@@ -44,30 +33,30 @@
     let lastBallShot = -1000;
     let ballsShot = [];
     let activeBallID = 0;
+    let startX=$robotDatas[dataIndex].robotCoords.x
     const countUp = () => (milliCount += 1);
     onInterval(countUp, 15);
     $ : {
         resetBot($reset)
-        retrieveData($robotDatas[dataIndex])
+        // retrieveData($robotDatas[dataIndex])
         calcMovement(milliCount)
         calcRotation(milliCount)
         manageIntake(milliCount)
         manageTurret(milliCount)
-        updateData(x, y, rot, turretAngle, balls, speeds)
+        // updateData(x, y, rot, turretAngle, balls, speeds)
         console.log(dataIndex)
     }
 
 
     function resetBot() {
         if ($reset) {
-            turretAngle = 0;
-            x = 100;
-            y = 100;
+            $robotDatas[dataIndex].turretAngle = 0;
+            $robotDatas[dataIndex].robotCoords.x = startX;
+            $robotDatas[dataIndex].robotCoords.y = 100;
             yValue = 0;
             xValue = 0;
-            rot = 0;
+            $robotDatas[dataIndex].robotAngle = 0;
         }
-        $reset = false;
     }
 
     function calcRotation() {
@@ -91,7 +80,7 @@
         if (rotAcc < 0) {
             rotAcc += rotDecay
         }
-        rot += rotAcc;
+        $robotDatas[dataIndex].robotAngle += rotAcc;
     }
 
     function calcMovement() {
@@ -105,23 +94,23 @@
 
         }
         if (wDown) {
-            if (yValue + 2.5 <= maxYAcc) {
-                yValue += 2.5;
+            if (yValue + 2.8 <= maxYAcc) {
+                yValue += 2.8;
             }
         }
         if (sDown) {
-            if (yValue - 2.5 >= maxYAcc * -1) {
-                yValue -= 2.5;
+            if (yValue - 2.8 >= maxYAcc * -1) {
+                yValue -= 2.8;
             }
         }
         if (aDown) {
-            if (xValue - 2.5 >= maxXAcc * -1) {
-                xValue -= 2.5;
+            if (xValue - 2.8 >= maxXAcc * -1) {
+                xValue -= 2.8;
             }
         }
         if (dDown) {
-            if (xValue + 2.5 <= maxXAcc) {
-                xValue += 2.5;
+            if (xValue + 2.8 <= maxXAcc) {
+                xValue += 2.8;
             }
         }
         if (spaceDown) {
@@ -146,34 +135,34 @@
         if (xValue < 0) {
             xValue += xDecay;
         }
-        x += xValue * speedModifier;
-        y -= yValue * speedModifier;
-        if (x > $fieldWidth - 65) {
-            x = $fieldWidth - 65
+        $robotDatas[dataIndex].robotCoords.x += xValue * speedModifier;
+        $robotDatas[dataIndex].robotCoords.y -= yValue * speedModifier;
+        if ($robotDatas[dataIndex].robotCoords.x > $fieldWidth - 65) {
+            $robotDatas[dataIndex].robotCoords.x = $fieldWidth - 65
         }
-        if (y > $fieldHeight - 65) {
-            y = $fieldHeight - 65
+        if ($robotDatas[dataIndex].robotCoords.y > $fieldHeight - 65) {
+            $robotDatas[dataIndex].robotCoords.y = $fieldHeight - 65
         }
-        if (x - 65 < 0) {
-            x = 65;
+        if ($robotDatas[dataIndex].robotCoords.x - 65 < 0) {
+            $robotDatas[dataIndex].robotCoords.x = 65;
         }
-        if (y - 65 < 0) {
-            y = 65;
+        if ($robotDatas[dataIndex].robotCoords.y - 65 < 0) {
+            $robotDatas[dataIndex].robotCoords.y = 65;
         }
         let xValid = false, yValid = false;
-        if (checkMoveValid($coords.x, y)) {
+        if (checkMoveValid($coords.x, $robotDatas[dataIndex].robotCoords.y)) {
             xValid = true;
         }
-        if (checkMoveValid(x, $coords.y)) {
+        if (checkMoveValid($robotDatas[dataIndex].robotCoords.x, $coords.y)) {
             yValid = true;
         }
-        if (!checkMoveValid(x, y)) {
+        if (!checkMoveValid($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y)) {
             xValid = false;
             yValid = false;
         }
         coords.update($coords => ({
-            x: ((xValid) ? x : $coords.x),
-            y: ((yValid) ? y : $coords.y)
+            x: ((xValid) ? $robotDatas[dataIndex].robotCoords.x : $coords.x),
+            y: ((yValid) ? $robotDatas[dataIndex].robotCoords.y : $coords.y)
         }));
         if (!xValid) {
             xValue = 0;
@@ -181,86 +170,63 @@
         if (!yValid) {
             yValue = 0;
         }
-        x = $coords.x
-        y = $coords.y
+        $robotDatas[dataIndex].robotCoords.x = $coords.x
+        $robotDatas[dataIndex].robotCoords.y = $coords.y
         let ballGap = ballSize / 2;
-        ballBox = {
-            x1: rotate(x, y, x - 65 - ballGap, y - 65 - ballGap, rot * -1)[0],
-            x2: rotate(x, y, x + 65 + ballGap, y - 65 - ballGap, rot * -1)[0],
-            x3: rotate(x, y, x + 65 + ballGap, y + 65 + ballGap, rot * -1)[0],
-            x4: rotate(x, y, x - 65 - ballGap, y + 65 + ballGap, rot * -1)[0],
-            y1: rotate(x, y, x - 65 - ballGap, y - 65 - ballGap, rot * -1)[1],
-            y2: rotate(x, y, x + 65 + ballGap, y - 65 - ballGap, rot * -1)[1],
-            y3: rotate(x, y, x + 65 + ballGap, y + 65 + ballGap, rot * -1)[1],
-            y4: rotate(x, y, x - 65 - ballGap, y + 65 + ballGap, rot * -1)[1]
+        $robotDatas[dataIndex].robotBallBox = {
+            x1: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x - 65 - ballGap, $robotDatas[dataIndex].robotCoords.y - 65 - ballGap, $robotDatas[dataIndex].robotAngle * -1)[0],
+            x2: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x + 65 + ballGap, $robotDatas[dataIndex].robotCoords.y - 65 - ballGap, $robotDatas[dataIndex].robotAngle * -1)[0],
+            x3: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x + 65 + ballGap, $robotDatas[dataIndex].robotCoords.y + 65 + ballGap, $robotDatas[dataIndex].robotAngle * -1)[0],
+            x4: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x - 65 - ballGap, $robotDatas[dataIndex].robotCoords.y + 65 + ballGap, $robotDatas[dataIndex].robotAngle * -1)[0],
+            y1: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x - 65 - ballGap, $robotDatas[dataIndex].robotCoords.y - 65 - ballGap, $robotDatas[dataIndex].robotAngle * -1)[1],
+            y2: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x + 65 + ballGap, $robotDatas[dataIndex].robotCoords.y - 65 - ballGap, $robotDatas[dataIndex].robotAngle * -1)[1],
+            y3: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x + 65 + ballGap, $robotDatas[dataIndex].robotCoords.y + 65 + ballGap, $robotDatas[dataIndex].robotAngle * -1)[1],
+            y4: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x - 65 - ballGap, $robotDatas[dataIndex].robotCoords.y + 65 + ballGap, $robotDatas[dataIndex].robotAngle * -1)[1]
         }
-        x=x;
-        y=y;
+        $robotDatas[dataIndex].robotCoords.x=$robotDatas[dataIndex].robotCoords.x;
+        $robotDatas[dataIndex].robotCoords.y=$robotDatas[dataIndex].robotCoords.y;
     }
 
     function checkMoveValid(x, y) {
         // console.log(Math.sqrt(Math.abs($fieldWidth/2 - x-65) ** 2 + Math.abs($fieldHeight/2 - y-65) ** 2))
-        return Math.sqrt(Math.abs($fieldWidth / 2 - x) ** 2 + Math.abs($fieldHeight / 2 - y) ** 2) >= 180;
+        return Math.sqrt(Math.abs($fieldWidth / 2 - $robotDatas[dataIndex].robotCoords.x) ** 2 + Math.abs($fieldHeight / 2 - y) ** 2) >= 180;
 
     }
 
-    function updateData(){
-        $robotDatas[dataIndex].robotCoords.x = x;
-        $robotDatas[dataIndex].robotCoords.y = y;
-        $robotDatas[dataIndex].robotAngle = rot;
-        $robotDatas[dataIndex].turretAngle = turretAngle;
-        $robotDatas[dataIndex].ballsInRobot = balls;
-        $robotDatas[dataIndex].intake = intakeCoords;
-        $robotDatas[dataIndex].robotBallBox = ballBox;
-        $robotDatas[dataIndex].robotSpeeds.x = xValue*speedModifier;
-        $robotDatas[dataIndex].robotSpeeds.y = yValue*speedModifier;
-        $robotDatas[dataIndex].color = color;
-        $robotDatas[dataIndex].config = config;
-    }
 
-    function retrieveData(){
-        x = $robotDatas[dataIndex].robotCoords.x;
-        y = $robotDatas[dataIndex].robotCoords.y;
-        rot = $robotDatas[dataIndex].robotAngle;
-        turretAngle = $robotDatas[dataIndex].turretAngle;
-        balls = $robotDatas[dataIndex].ballsInRobot;
-        intakeCoords = $robotDatas[dataIndex].intake;
-        ballBox = $robotDatas[dataIndex].robotBallBox;
-        speeds = $robotDatas[dataIndex].robotSpeeds;
-        color = $robotDatas[dataIndex].color;
-        config = $robotDatas[dataIndex].config;
-    }
+
+
 
     function manageIntake() {
-        intakeCoords={
-            x1: rotate($coords.x, $coords.y, $coords.x - 60 - ballSize / 2, $coords.y - 120 - ballSize / 2, rot * -1)[0], //top left
-            y1: rotate($coords.x, $coords.y, $coords.x - 60 - ballSize / 2, $coords.y - 120 - ballSize / 2, rot * -1)[1],
-            x2: rotate($coords.x, $coords.y, $coords.x + 60 + ballSize / 2, $coords.y - 120 - ballSize / 2, rot * -1)[0], //top right
-            y2: rotate($coords.x, $coords.y, $coords.x + 60 + ballSize / 2, $coords.y - 120 - ballSize / 2, rot * -1)[1],
-            x3: rotate($coords.x, $coords.y, $coords.x + 60 + ballSize / 2, $coords.y - 65, rot * -1)[0], //bottom right
-            y3: rotate($coords.x, $coords.y, $coords.x + 60 + ballSize / 2, $coords.y - 65, rot * -1)[1],
-            x4: rotate($coords.x, $coords.y, $coords.x - 60 - ballSize / 2, $coords.y - 65, rot * -1)[0], //bottom left
-            y4: rotate($coords.x, $coords.y, $coords.x - 60 - ballSize / 2, $coords.y - 65, rot * -1)[1]
+        $robotDatas[dataIndex].intake={
+            x1: rotate($coords.x, $coords.y, $coords.x - 60 - ballSize / 2, $coords.y - 120 - ballSize / 2, $robotDatas[dataIndex].robotAngle * -1)[0], //top left
+            y1: rotate($coords.x, $coords.y, $coords.x - 60 - ballSize / 2, $coords.y - 120 - ballSize / 2, $robotDatas[dataIndex].robotAngle * -1)[1],
+            x2: rotate($coords.x, $coords.y, $coords.x + 60 + ballSize / 2, $coords.y - 120 - ballSize / 2, $robotDatas[dataIndex].robotAngle * -1)[0], //top right
+            y2: rotate($coords.x, $coords.y, $coords.x + 60 + ballSize / 2, $coords.y - 120 - ballSize / 2, $robotDatas[dataIndex].robotAngle * -1)[1],
+            x3: rotate($coords.x, $coords.y, $coords.x + 60 + ballSize / 2, $coords.y - 65, $robotDatas[dataIndex].robotAngle * -1)[0], //bottom right
+            y3: rotate($coords.x, $coords.y, $coords.x + 60 + ballSize / 2, $coords.y - 65, $robotDatas[dataIndex].robotAngle * -1)[1],
+            x4: rotate($coords.x, $coords.y, $coords.x - 60 - ballSize / 2, $coords.y - 65, $robotDatas[dataIndex].robotAngle * -1)[0], //bottom left
+            y4: rotate($coords.x, $coords.y, $coords.x - 60 - ballSize / 2, $coords.y - 65, $robotDatas[dataIndex].robotAngle * -1)[1]
         };
     }
 
     function manageTurret() {
         let distanceFromGoal = Math.sqrt(($coords.x - $fieldWidth / 2) ** 2 + ($coords.y - $fieldHeight / 2) ** 2);
-        turretGoal = (rot * -1 + Math.atan2($fieldHeight / 2 - $coords.y, $fieldWidth / 2 - $coords.x) * (180 / Math.PI) + 90) % 360;
+        turretGoal = ($robotDatas[dataIndex].robotAngle * -1 + Math.atan2($fieldHeight / 2 - $coords.y, $fieldWidth / 2 - $coords.x) * (180 / Math.PI) + 90) % 360;
         if (turretGoal < 0) {
             turretGoal += 360;
         }
         if (distanceFromGoal < $vizRingSize / 2) {
             $vizRing = true;
-            if (calcTurretDirection(turretGoal, turretAngle)) {
-                turretAngle += turretSpeed;
+            if (calcTurretDirection(turretGoal, $robotDatas[dataIndex].turretAngle)) {
+                $robotDatas[dataIndex].turretAngle += turretSpeed;
                 if (spaceDown) {
-                    turretAngle += turretSpeed;
+                    $robotDatas[dataIndex].turretAngle += turretSpeed;
                 }
             } else {
-                turretAngle -= turretSpeed;
+                $robotDatas[dataIndex].turretAngle -= turretSpeed;
                 if (spaceDown) {
-                    turretAngle -= turretSpeed;
+                    $robotDatas[dataIndex].turretAngle -= turretSpeed;
                 }
             }
         } else {
@@ -269,18 +235,18 @@
             }
             // turretAngle += turretSpeed * 1.5;
         }
-        if (turretAngle < 0) {
-            turretAngle += 360;
+        if ($robotDatas[dataIndex].turretAngle < 0) {
+            $robotDatas[dataIndex].turretAngle += 360;
         }
-        turretAngle = turretAngle % 360;
-        if (Math.min(Math.abs(turretAngle - turretGoal), Math.abs(360 - turretGoal + turretAngle)) < turretSpeed * 3 && distanceFromGoal < $vizRingSize / 2) {
-            turretAngle = turretGoal;
+        $robotDatas[dataIndex].turretAngle = $robotDatas[dataIndex].turretAngle % 360;
+        if (Math.min(Math.abs($robotDatas[dataIndex].turretAngle - turretGoal), Math.abs(360 - turretGoal + $robotDatas[dataIndex].turretAngle)) < turretSpeed * 3 && distanceFromGoal < $vizRingSize / 2) {
+            $robotDatas[dataIndex].turretAngle = turretGoal;
             turretLockedOn = true;
         } else {
             turretLockedOn = false;
         }
         //Enable to allow for shooting from range if turret is aligned, even if out of range
-        turretSecretLockedOn = Math.min(Math.abs(turretAngle - turretGoal), Math.abs(360 - turretGoal + turretAngle)) < turretSpeed * 3 && distanceFromGoal < $vizRingSize / 2 + 100;
+        turretSecretLockedOn = Math.min(Math.abs($robotDatas[dataIndex].turretAngle - turretGoal), Math.abs(360 - turretGoal + $robotDatas[dataIndex].turretAngle)) < turretSpeed * 3 && distanceFromGoal < $vizRingSize / 2 + 100;
         if (distanceFromGoal > $vizRingSize / 2) {
             turretLockedOn = false;
         }
@@ -324,41 +290,41 @@
         let key = event.key.toLowerCase();
         // if (event.repeat) return;
         switch (key) {
-            case "w":
+            case $controls[dataIndex].up:
                 wDown = true;
 
                 event.preventDefault();
                 break;
-            case "a":
+            case $controls[dataIndex].left:
                 aDown = true;
 
                 event.preventDefault();
                 break;
-            case "s":
+            case $controls[dataIndex].down:
                 sDown = true;
 
                 event.preventDefault();
                 break;
-            case "d":
+            case $controls[dataIndex].right:
                 dDown = true;
 
                 event.preventDefault();
                 break;
-            case "j":
+            case $controls[dataIndex].turnLeft:
                 jDown = true;
 
                 event.preventDefault();
                 break;
-            case "l":
+            case $controls[dataIndex].turnRight:
                 lDown = true;
 
                 event.preventDefault();
                 break;
-            case " ":
+            case $controls[dataIndex].shoot:
                 spaceDown = true;
                 event.preventDefault();
                 break;
-            case "shift":
+            case $controls[dataIndex].viz:
                 shiftDown = true;
                 $vizRing = true
                 event.preventDefault();
@@ -370,39 +336,39 @@
         let key = event.key.toLowerCase();
         // if (event.repeat) return;
         switch (key) {
-            case "w":
+            case $controls[dataIndex].up:
                 wDown = false
 
                 event.preventDefault();
                 break;
-            case "a":
+            case $controls[dataIndex].left:
                 aDown = false;
 
                 event.preventDefault();
                 break;
-            case "s":
+            case $controls[dataIndex].down:
                 sDown = false;
 
                 event.preventDefault();
                 break;
-            case "d":
+            case $controls[dataIndex].right:
                 dDown = false;
 
                 event.preventDefault();
                 break;
-            case "j":
+            case $controls[dataIndex].turnLeft:
                 jDown = false;
 
                 event.preventDefault();
                 break;
-            case "l":
+            case $controls[dataIndex].turnRight:
                 lDown = false;
 
                 event.preventDefault();
                 break;
-            case " ":
+            case $controls[dataIndex].shoot:
                 spaceDown = false;
-                if (balls > 0 && milliCount - lastBallShot > ballShotPace) {
+                if ($robotDatas[dataIndex].ballsInRobot > 0 && milliCount - lastBallShot > ballShotPace) {
                     lastBallShot = milliCount;
 
                     ballsShot.push({
@@ -419,7 +385,7 @@
 
                 event.preventDefault();
                 break;
-            case "shift":
+            case $controls[dataIndex].viz:
                 shiftDown = false;
                 $vizRing = false
                 event.preventDefault();
@@ -449,18 +415,18 @@
 </div>
 
 <div class="box grid h-screen place-items-center" id="robot" style="transform:
-		translate({x-65}px,{y-65}px)
-        rotate({rot}deg)">
+		translate({$robotDatas[dataIndex].robotCoords.x-65}px,{$robotDatas[dataIndex].robotCoords.y-65}px)
+        rotate({$robotDatas[dataIndex].robotAngle}deg)">
 
     <svg xmlns="http://www.w3.org/2000/svg" class="h-[90px] fixed" fill="none" viewBox="0 0 24 24"
-         stroke={((turretLockedOn) ? "green" : "white")} stroke-width="2" style="transform: rotate({turretAngle}deg)">
+         stroke={((turretLockedOn) ? "green" : "white")} stroke-width="2" style="transform: rotate({$robotDatas[dataIndex].turretAngle}deg)">
         <path stroke-linecap="round" stroke-linejoin="round"
               d="M9 11l3-3m0 0l3 3m-3-3v8m0-13a9 9 0 110 18 9 9 0 010-18z"/>
     </svg>
     <svg class="fixed ml-[100px] mt-[100px]"
          width="30px" height="30px"
          viewBox="0 0 21 21" stroke-width="3" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="10.5" cy="10.5" fill={((balls>0) ? ((balls>1) ? "green" : "yellow") : "none")} r="7"
+        <circle cx="10.5" cy="10.5" fill={(($robotDatas[dataIndex].ballsInRobot>0) ? (($robotDatas[dataIndex].ballsInRobot>1) ? "green" : "yellow") : "none")} r="7"
                 stroke="currentColor" stroke-linecap="round"
                 stroke-linejoin="round"/>
     </svg>
