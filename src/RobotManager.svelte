@@ -9,6 +9,7 @@
     let defaultRobotCoords = {x: 100, y: 100};
     let defaultRobotAngle = 0;
     let defaultRobotBallBox = {x1: 0, x2: 0, x3: 0, x4: 0, y1: 0, y2: 0, y3: 0, y4: 0};
+    let defaultRobotBox =  {x1: 0, x2: 0, x3: 0, x4: 0, y1: 0, y2: 0, y3: 0, y4: 0};
     let defaultRobotSpeeds = {x: 0, y: 0};
     let defaultRobotColor = "red";
     let defaultRobotConfig = "turret"
@@ -22,6 +23,7 @@
         {x: 100, y: 100}, //default coords
         0,//defaultRobotAngle
         {x1: 0, x2: 0, x3: 0, x4: 0, y1: 0, y2: 0, y3: 0, y4: 0},//defaultRobotBallBox
+        {x1: 0, x2: 0, x3: 0, x4: 0, y1: 0, y2: 0, y3: 0, y4: 0},//defaultRobotBox
         {x: 0, y: 0},//defaultRobotSpeeds
         "red",//defaultRobotColor
         "turret",defaultRobotConfig
@@ -38,6 +40,7 @@
                 {x: liveX, y: 100}, //default coords
                 0,//defaultRobotAngle
                 {x1: 0, x2: 0, x3: 0, x4: 0, y1: 0, y2: 0, y3: 0, y4: 0},//defaultRobotBallBox
+                {x1: 0, x2: 0, x3: 0, x4: 0, y1: 0, y2: 0, y3: 0, y4: 0},//defaultRobotBox
                 {x: 0, y: 0},//defaultRobotSpeeds
                 "red",//defaultRobotColor
                 "turret",defaultRobotConfig

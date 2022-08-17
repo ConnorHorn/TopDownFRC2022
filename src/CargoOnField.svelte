@@ -16,7 +16,7 @@ const countUp = () => (milliCount += 1);
 onInterval(countUp, 10);
 
 
-let numberOfBallOnField=6;
+let numberOfBallOnField=8;
 $: {
     resetBalls($reset)
     occupyField(milliCount);

@@ -12,7 +12,6 @@
     import ShotCargo from "./ShotCargo.svelte";
 
     export let dataIndex;
-    console.log("coord"+$robotDatas[dataIndex].robotCoords.x)
 
     let speedModifier = 0.3;
     let shiftDown = false, wDown = false, aDown = false, sDown = false, dDown = false, jDown = false, lDown = false,
@@ -33,7 +32,7 @@
     let lastBallShot = -1000;
     let ballsShot = [];
     let activeBallID = 0;
-    let startX=$robotDatas[dataIndex].robotCoords.x
+    let startX = $robotDatas[dataIndex].robotCoords.x
     const countUp = () => (milliCount += 1);
     onInterval(countUp, 15);
     $ : {
@@ -44,7 +43,6 @@
         manageIntake(milliCount)
         manageTurret(milliCount)
         // updateData(x, y, rot, turretAngle, balls, speeds)
-        console.log(dataIndex)
     }
 
 
@@ -60,7 +58,6 @@
     }
 
     function calcRotation() {
-        console.log("rotatin")
         if (jDown) {
             if (rotAcc - rotPace >= maxRotAcc * -1) {
                 rotAcc -= rotPace;
@@ -161,8 +158,8 @@
             yValid = false;
         }
         coords.update($coords => ({
-            x: ((xValid) ? $robotDatas[dataIndex].robotCoords.x : $coords.x),
-            y: ((yValid) ? $robotDatas[dataIndex].robotCoords.y : $coords.y)
+            x: ((!checkRobotCollide() && xValid) ? $robotDatas[dataIndex].robotCoords.x : $coords.x),
+            y: ((!checkRobotCollide() && yValid) ? $robotDatas[dataIndex].robotCoords.y : $coords.y)
         }));
         if (!xValid) {
             xValue = 0;
@@ -170,8 +167,9 @@
         if (!yValid) {
             yValue = 0;
         }
-        $robotDatas[dataIndex].robotCoords.x = $coords.x
-        $robotDatas[dataIndex].robotCoords.y = $coords.y
+            $robotDatas[dataIndex].robotCoords.x = $coords.x
+            $robotDatas[dataIndex].robotCoords.y = $coords.y
+
         let ballGap = ballSize / 2;
         $robotDatas[dataIndex].robotBallBox = {
             x1: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x - 65 - ballGap, $robotDatas[dataIndex].robotCoords.y - 65 - ballGap, $robotDatas[dataIndex].robotAngle * -1)[0],
@@ -183,22 +181,70 @@
             y3: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x + 65 + ballGap, $robotDatas[dataIndex].robotCoords.y + 65 + ballGap, $robotDatas[dataIndex].robotAngle * -1)[1],
             y4: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x - 65 - ballGap, $robotDatas[dataIndex].robotCoords.y + 65 + ballGap, $robotDatas[dataIndex].robotAngle * -1)[1]
         }
-        $robotDatas[dataIndex].robotCoords.x=$robotDatas[dataIndex].robotCoords.x;
-        $robotDatas[dataIndex].robotCoords.y=$robotDatas[dataIndex].robotCoords.y;
+        $robotDatas[dataIndex].robotBox = {
+            x1: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x - 65, $robotDatas[dataIndex].robotCoords.y - 65, $robotDatas[dataIndex].robotAngle * -1)[0],
+            x2: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x + 65, $robotDatas[dataIndex].robotCoords.y - 65, $robotDatas[dataIndex].robotAngle * -1)[0],
+            x3: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x + 65, $robotDatas[dataIndex].robotCoords.y + 65, $robotDatas[dataIndex].robotAngle * -1)[0],
+            x4: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x - 65, $robotDatas[dataIndex].robotCoords.y + 65, $robotDatas[dataIndex].robotAngle * -1)[0],
+            y1: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x - 65, $robotDatas[dataIndex].robotCoords.y - 65, $robotDatas[dataIndex].robotAngle * -1)[1],
+            y2: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x + 65, $robotDatas[dataIndex].robotCoords.y - 65, $robotDatas[dataIndex].robotAngle * -1)[1],
+            y3: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x + 65, $robotDatas[dataIndex].robotCoords.y + 65, $robotDatas[dataIndex].robotAngle * -1)[1],
+            y4: rotate($robotDatas[dataIndex].robotCoords.x, $robotDatas[dataIndex].robotCoords.y, $robotDatas[dataIndex].robotCoords.x - 65, $robotDatas[dataIndex].robotCoords.y + 65, $robotDatas[dataIndex].robotAngle * -1)[1]
+        }
+        $robotDatas[dataIndex].robotCoords.x = $robotDatas[dataIndex].robotCoords.x;
+        $robotDatas[dataIndex].robotCoords.y = $robotDatas[dataIndex].robotCoords.y;
     }
 
     function checkMoveValid(x, y) {
         // console.log(Math.sqrt(Math.abs($fieldWidth/2 - x-65) ** 2 + Math.abs($fieldHeight/2 - y-65) ** 2))
+
         return Math.sqrt(Math.abs($fieldWidth / 2 - $robotDatas[dataIndex].robotCoords.x) ** 2 + Math.abs($fieldHeight / 2 - y) ** 2) >= 180;
 
     }
 
+    function checkRobotCollide(){
+        for (let p = 0; p < $robotDatas.length - 1; p++) {
+            if (
+                intersects($robotDatas[dataIndex].robotBox.x1, $robotDatas[dataIndex].robotBox.y1, $robotDatas[dataIndex].robotBox.x2, $robotDatas[dataIndex].robotBox.y2, $robotDatas[p].robotBox.x1, $robotDatas[p].robotBox.y1, $robotDatas[p].robotBox.x2, $robotDatas[p].robotBox.y2) ||
+                intersects($robotDatas[dataIndex].robotBox.x2, $robotDatas[dataIndex].robotBox.y2, $robotDatas[dataIndex].robotBox.x3, $robotDatas[dataIndex].robotBox.y3, $robotDatas[p].robotBox.x1, $robotDatas[p].robotBox.y1, $robotDatas[p].robotBox.x2, $robotDatas[p].robotBox.y2) ||
+                intersects($robotDatas[dataIndex].robotBox.x3, $robotDatas[dataIndex].robotBox.y3, $robotDatas[dataIndex].robotBox.x4, $robotDatas[dataIndex].robotBox.y4, $robotDatas[p].robotBox.x1, $robotDatas[p].robotBox.y1, $robotDatas[p].robotBox.x2, $robotDatas[p].robotBox.y2) ||
+                intersects($robotDatas[dataIndex].robotBox.x4, $robotDatas[dataIndex].robotBox.y4, $robotDatas[dataIndex].robotBox.x1, $robotDatas[dataIndex].robotBox.y1, $robotDatas[p].robotBox.x1, $robotDatas[p].robotBox.y1, $robotDatas[p].robotBox.x2, $robotDatas[p].robotBox.y2) ||
+                intersects($robotDatas[dataIndex].robotBox.x1, $robotDatas[dataIndex].robotBox.y1, $robotDatas[dataIndex].robotBox.x2, $robotDatas[dataIndex].robotBox.y2, $robotDatas[p].robotBox.x2, $robotDatas[p].robotBox.y2, $robotDatas[p].robotBox.x3, $robotDatas[p].robotBox.y3) ||
+                intersects($robotDatas[dataIndex].robotBox.x2, $robotDatas[dataIndex].robotBox.y2, $robotDatas[dataIndex].robotBox.x3, $robotDatas[dataIndex].robotBox.y3, $robotDatas[p].robotBox.x2, $robotDatas[p].robotBox.y2, $robotDatas[p].robotBox.x3, $robotDatas[p].robotBox.y3) ||
+                intersects($robotDatas[dataIndex].robotBox.x3, $robotDatas[dataIndex].robotBox.y3, $robotDatas[dataIndex].robotBox.x4, $robotDatas[dataIndex].robotBox.y4, $robotDatas[p].robotBox.x2, $robotDatas[p].robotBox.y2, $robotDatas[p].robotBox.x3, $robotDatas[p].robotBox.y3) ||
+                intersects($robotDatas[dataIndex].robotBox.x4, $robotDatas[dataIndex].robotBox.y4, $robotDatas[dataIndex].robotBox.x1, $robotDatas[dataIndex].robotBox.y1, $robotDatas[p].robotBox.x2, $robotDatas[p].robotBox.y2, $robotDatas[p].robotBox.x3, $robotDatas[p].robotBox.y3) ||
+                intersects($robotDatas[dataIndex].robotBox.x1, $robotDatas[dataIndex].robotBox.y1, $robotDatas[dataIndex].robotBox.x2, $robotDatas[dataIndex].robotBox.y2, $robotDatas[p].robotBox.x3, $robotDatas[p].robotBox.y3, $robotDatas[p].robotBox.x4, $robotDatas[p].robotBox.y4) ||
+                intersects($robotDatas[dataIndex].robotBox.x2, $robotDatas[dataIndex].robotBox.y2, $robotDatas[dataIndex].robotBox.x3, $robotDatas[dataIndex].robotBox.y3, $robotDatas[p].robotBox.x3, $robotDatas[p].robotBox.y3, $robotDatas[p].robotBox.x4, $robotDatas[p].robotBox.y4) ||
+                intersects($robotDatas[dataIndex].robotBox.x3, $robotDatas[dataIndex].robotBox.y3, $robotDatas[dataIndex].robotBox.x4, $robotDatas[dataIndex].robotBox.y4, $robotDatas[p].robotBox.x3, $robotDatas[p].robotBox.y3, $robotDatas[p].robotBox.x4, $robotDatas[p].robotBox.y4) ||
+                intersects($robotDatas[dataIndex].robotBox.x4, $robotDatas[dataIndex].robotBox.y4, $robotDatas[dataIndex].robotBox.x1, $robotDatas[dataIndex].robotBox.y1, $robotDatas[p].robotBox.x3, $robotDatas[p].robotBox.y3, $robotDatas[p].robotBox.x4, $robotDatas[p].robotBox.y4) ||
+                intersects($robotDatas[dataIndex].robotBox.x1, $robotDatas[dataIndex].robotBox.y1, $robotDatas[dataIndex].robotBox.x2, $robotDatas[dataIndex].robotBox.y2, $robotDatas[p].robotBox.x4, $robotDatas[p].robotBox.y4, $robotDatas[p].robotBox.x1, $robotDatas[p].robotBox.y1) ||
+                intersects($robotDatas[dataIndex].robotBox.x2, $robotDatas[dataIndex].robotBox.y2, $robotDatas[dataIndex].robotBox.x3, $robotDatas[dataIndex].robotBox.y3, $robotDatas[p].robotBox.x4, $robotDatas[p].robotBox.y4, $robotDatas[p].robotBox.x1, $robotDatas[p].robotBox.y1) ||
+                intersects($robotDatas[dataIndex].robotBox.x3, $robotDatas[dataIndex].robotBox.y3, $robotDatas[dataIndex].robotBox.x4, $robotDatas[dataIndex].robotBox.y4, $robotDatas[p].robotBox.x4, $robotDatas[p].robotBox.y4, $robotDatas[p].robotBox.x1, $robotDatas[p].robotBox.y1) ||
+                intersects($robotDatas[dataIndex].robotBox.x4, $robotDatas[dataIndex].robotBox.y4, $robotDatas[dataIndex].robotBox.x1, $robotDatas[dataIndex].robotBox.y1, $robotDatas[p].robotBox.x4, $robotDatas[p].robotBox.y4, $robotDatas[p].robotBox.x1, $robotDatas[p].robotBox.y1)
+            ) {
+                console.log("collide")
+                return true;
+            }
 
+        }
+    }
 
+    // returns true if the line from (a,b)->(c,d) intersects with (p,q)->(r,s)
+    function intersects(a, b, c, d, p, q, r, s) {
+        let det, gamma, lambda;
+        det = (c - a) * (s - q) - (r - p) * (d - b);
+        if (det === 0) {
+            return false;
+        } else {
+            lambda = ((s - q) * (r - a) + (p - r) * (s - b)) / det;
+            gamma = ((b - d) * (r - a) + (c - a) * (s - b)) / det;
+            return (0 < lambda && lambda < 1) && (0 < gamma && gamma < 1);
+        }
+    }
 
 
     function manageIntake() {
-        $robotDatas[dataIndex].intake={
+        $robotDatas[dataIndex].intake = {
             x1: rotate($coords.x, $coords.y, $coords.x - 60 - ballSize / 2, $coords.y - 120 - ballSize / 2, $robotDatas[dataIndex].robotAngle * -1)[0], //top left
             y1: rotate($coords.x, $coords.y, $coords.x - 60 - ballSize / 2, $coords.y - 120 - ballSize / 2, $robotDatas[dataIndex].robotAngle * -1)[1],
             x2: rotate($coords.x, $coords.y, $coords.x + 60 + ballSize / 2, $coords.y - 120 - ballSize / 2, $robotDatas[dataIndex].robotAngle * -1)[0], //top right
@@ -419,14 +465,17 @@
         rotate({$robotDatas[dataIndex].robotAngle}deg)">
 
     <svg xmlns="http://www.w3.org/2000/svg" class="h-[90px] fixed" fill="none" viewBox="0 0 24 24"
-         stroke={((turretLockedOn) ? "green" : "white")} stroke-width="2" style="transform: rotate({$robotDatas[dataIndex].turretAngle}deg)">
+         stroke={((turretLockedOn) ? "green" : "white")} stroke-width="2"
+         style="transform: rotate({$robotDatas[dataIndex].turretAngle}deg)">
         <path stroke-linecap="round" stroke-linejoin="round"
               d="M9 11l3-3m0 0l3 3m-3-3v8m0-13a9 9 0 110 18 9 9 0 010-18z"/>
     </svg>
     <svg class="fixed ml-[100px] mt-[100px]"
          width="30px" height="30px"
          viewBox="0 0 21 21" stroke-width="3" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="10.5" cy="10.5" fill={(($robotDatas[dataIndex].ballsInRobot>0) ? (($robotDatas[dataIndex].ballsInRobot>1) ? "green" : "yellow") : "none")} r="7"
+        <circle cx="10.5" cy="10.5"
+                fill={(($robotDatas[dataIndex].ballsInRobot>0) ? (($robotDatas[dataIndex].ballsInRobot>1) ? "green" : "yellow") : "none")}
+                r="7"
                 stroke="currentColor" stroke-linecap="round"
                 stroke-linejoin="round"/>
     </svg>
@@ -443,7 +492,8 @@
 </div>
 
 {#each ballsShot as ball (ball.id)}
-    <ShotCargo startX={ball.startX} dataIndex={dataIndex} startY={ball.startY} endX={ball.endX} endY="{ball.endY}" miss={ball.miss}
+    <ShotCargo startX={ball.startX} dataIndex={dataIndex} startY={ball.startY} endX={ball.endX} endY="{ball.endY}"
+               miss={ball.miss}
                id="{ball.id}" on:scored={cargoScored}/>
 {/each}
 
